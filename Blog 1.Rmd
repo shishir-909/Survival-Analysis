@@ -25,7 +25,7 @@ options(htmltools.dir.version = FALSE)
 
 # Introduction
 
-In this article, we will analyse vehicle shock absorb-er failure time data and estimate a few basic survival quantities^[Failure time data is also known as survival data, life data, event-time data or reliability data, depending on the field of study.]. The data contains failure times (in kilometers driven) and the mode of failure. We will ignore the mode of failure for this article and will only consider whether a failure occurred or not i.e. censored^[We will consider the 2 different modes of failure in a future article about competing risks.]. 
+In this article, we will analyse vehicle shock absorb-er failure time data and estimate a few basic survival quantities^[Failure time data is also known as survival data, life data, event-time data or reliability data, depending on the field of study.]. The data contains failure times (in kilometers driven) and the mode of failure. We will ignore the mode of failure for this article and will only consider whether a failure occurred or not i.e. censored. 
 
 Survival function $S(t)$ is defined as the probability that a unit's time to failure ($T$) is greater than some time ($t$)^[Time is measured in kilometers in this example]. 
 
