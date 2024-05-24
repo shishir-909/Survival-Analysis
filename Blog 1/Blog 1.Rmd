@@ -30,13 +30,13 @@ library(readxl)
 library(readr)
 library(survminer)
 
- setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 1")
+setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 1")
 
 ```
 
 # Introduction
 
-Recently, I have been reading the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger). Although the techniques presented in this book focus on applications in biology and medicine, the same statistical tools can also be applied to disciplines ranging from engineering to economics and demography. I have a background in mechanical engineering and am interested in applying survival modeling concepts to data from reliability engineering, manufacturing and quality assurance. This article is the first of, hopefully, many articles that I intend to write as I finish reading different chapters from this wonderful book. 
+I am currently reading the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger). Although the techniques presented in this book focus on applications in biology and medicine, the same statistical tools can also be applied to disciplines ranging from engineering to economics and demography. I have a background in mechanical engineering and am interested in applying survival modeling concepts to data from reliability engineering, manufacturing and quality assurance. This article is the first of, hopefully, many articles that I intend to write as I finish reading different chapters from the book. 
 
 The data set(s) that I plan to analyse are the ones that have been used as examples in another book: Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual). Both the books I mentioned are excellent resources for anyone who is interested in learning more about this topic.
 
