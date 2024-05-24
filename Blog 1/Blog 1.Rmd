@@ -38,9 +38,9 @@ setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/In
 
 I am currently reading the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger). Although the techniques presented in this book focus on applications in biology and medicine, the same statistical tools can also be applied to disciplines ranging from engineering to economics and demography. I have a background in mechanical engineering and am interested in applying survival modeling concepts to data from reliability engineering, manufacturing and quality assurance. This article is the first of, hopefully, many articles that I intend to write as I finish reading different chapters from the book. 
 
-The data set(s) that I plan to analyse are the ones that have been used as examples in another book: Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual). Both the books I mentioned are excellent resources for anyone who is interested in learning more about this topic.
+The data set(s) that will be analysed are the ones that have been used as examples in another book: Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual). Both the books I mentioned are excellent resources for anyone who is interested in learning more about this topic.
 
-In this article, we will analyse vehicle shock absorb-er failure time data^[Failure time data is also known as survival data, life data, event-time data or reliability data, depending on the field of study.] and estimate a few basic survival quantities. The data contains failure times (in kilometers driven) and the mode of failure, first reported by O'Connor (1985)^[O'Connor, P. D. T. (1985). *Practical Reliability Engineering.* Wiley. [54, 610]]. We will ignore the mode of failure for now and will only consider whether a failure occurred or not i.e. censored. In a future article, I plan to use the different failure modes to discuss competing risks for time-to-failure data.
+In this article, we will analyse vehicle shock absorber failure time data^[Failure time data is also known as survival data, life data, event-time data or reliability data, depending on the field of study.] and estimate a few basic survival quantities. The data contains failure times (in kilometers driven) and the mode of failure, first reported by O'Connor (1985)^[O'Connor, P. D. T. (1985). *Practical Reliability Engineering.* Wiley. [54, 610]]. We will ignore the mode of failure for now and will only consider whether a failure occurred or not i.e. censored. In a future article, I plan to use the different failure modes to discuss competing risks for time-to-failure data.
 
 # Kaplan Meir Curve
 
@@ -171,7 +171,7 @@ survMisc::ci(ten_ShockAbsorber,
    tU = 20000)
 ```
 
-The confidence band is expected to be wider than the pointwise confidence intervals. The lower and upper values of the 90%^[Note that the calculation of the confidence bands depend on lookup tables inside the survMisc package. These tables have only been constructed for the 90%, 95% and 99% confidence leves, due to which these 3 values are the only permissible values in the CI argument to the survMisc function.] confidence band at 19,000 km is (51%, 91%) whereas the point wise confidence interval at 19,000 km, which we found previously, is (61.5%, 88.5%).
+The confidence band is expected to be wider than the pointwise confidence intervals. We have used the same *arc sine* transformation here as well. The lower and upper values of the 90%^[Note that the calculation of the confidence bands depend on lookup tables inside the survMisc package. These tables have only been constructed for the 90%, 95% and 99% confidence levels, due to which these 3 values are the only permissible values in the CI argument to the survMisc function.] confidence band at 19,000 km is (51%, 91%) whereas the point wise confidence interval at 19,000 km, which we found previously, is (61.5%, 88.5%).
 
 
 ## Mean Survival Time
