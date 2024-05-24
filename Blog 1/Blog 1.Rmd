@@ -30,6 +30,8 @@ library(readxl)
 library(readr)
 library(survminer)
 
+ setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 1")
+
 ```
 
 # Introduction
@@ -66,8 +68,8 @@ The hazard function^[It is often called failure rate in Reliability] is another 
 In this example, we are interested in finding a non-parametric estimate of the survival function in order to gauge the probability that a shock absorber will survive a certain distance before failing.
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-ShockAbsorber <- read_csv("ShockAbsorber.csv")
 
+ShockAbsorber <- read_csv("Data/ShockAbsorber.csv")
 knitr::kable((ShockAbsorber), caption = "Table 1. Shock Absorber Data", align = rep('c', 3))
 
 ```
@@ -98,8 +100,6 @@ fit_1 <- survival::survfit(
   , conf.int = 0.9
   , data = ShockAbsorber) 
 
-#plot(fit_1, xlab = "Kilometers", ylab = "Survival Probability")
-
 survminer::ggsurvplot(fit_1,
                       risk.table = TRUE,
                       title = "Kaplan-Meir curve",
@@ -126,8 +126,6 @@ Notice that the *n.event* column in the above summary is the number of failures 
 
 The probability that a shock absorber will last at least 19,000 km is 78.4%. It is always a good idea to present an estimate with a confidence interval, which is discussed next.
 
-with a 90% confidence interval (61.5%, 88.5%).
-
 ## Pointwise Confidence Intervals
 
 The simplest confidence interval at a given time $(t_{0})$ is the linear confidence interval, given by 
@@ -141,7 +139,7 @@ Although the linear confidence interval has a simple form, the normal distributi
 Different transformations like the *log*, *log-log*, *logit*, *arcsin* are available in the *survival* package by using the *conf.type* argument^[The confidence intervals obtained through different transformations may not be symmetric like the linear CI]. The formulas for the confidence intervals from the different transformations can be found in any survival modeling textbook^[I did consider including the formulas here for educational purposes, but the Latex code for typing the formulas would have taken me a very long time.]. As per the text in the *survival* package documentation by Dr. Therneau: *"Which of the choices of log, log-log, or logit is "best" depends on the details of any
 particular simulation study"*. I have used the "arcsin" transformation for constructing our confidence intervals since its coverage probability tends to be a bit more conservative i.e. greater than $(1-\alpha)$ for small sample sizes.
 
-The probability that a shock absorber will last at least 19,000 km is 78.4% with a 90% confidence interval (61.5%, 88.5%).
+The probability that a shock absorber will last at least 19,000 km is 78.4% with a 90% confidence interval (63.9%, 89.9%)..
 
 The Kaplan-Meir curve plotted above shows the confidence region around the curve. It can be seen that the interval width increases with time (distance) since the number of observations (number at risk) decrease with time, thereby increasing the standard error. 
 
@@ -149,7 +147,7 @@ The Kaplan-Meir curve plotted above shows the confidence region around the curve
 
 The confidence intervals obtained above are only valid at a particular point $(t_{0})$. If we want a confidence interval for the survival function over a range of values of *t*, we will need to construct confidence bands. These confidence bands ensure that the statistical uncertainty is simultaneously quantified over a range of time and not just at a single point.^[In other words, the confidence band guarantees, with a given confidence, that the survival function falls within the band for all *t* in some interval. I see this as being somewhat similar to the correction of the significance value $\alpha$ for multiple comparison tests.]
 
-Note that although the Kaplan-Meir plot previously plotted shows the confidence region that looks like a band, it is based on point wise confidence intervals and is not a confidence band.
+It is important to point out that although the Kaplan-Meir plot above shows the confidence region that looks like a band, it is based on point wise confidence intervals and is not a confidence band.
 
 We will now construct a 90% confidence band for the range 10,000 km to 20,000 km.
 
@@ -200,7 +198,7 @@ We will stick to the information in the data and calculate the restricted mean w
 The lower and upper interval limits shown in the output are for the median. The confidence limits for the mean can be calculated as follows:
 
 $$\hat{\mu}_{\tau} \pm Z_{1-\frac{\alpha}{2}} \sqrt{\hat{V}[\hat{\mu}_{\tau}]}$$
-where $\sqrt{\hat{V}[\hat{\mu}_{\tau}]}$ is the standard error of the restricted mean given in the output above and $Z_{1-\frac{\alpha}{2}}$ is the $(1-\frac{\alpha}{2})$ percentile of the standard normal distribution. The confidence interval of the restricted mean with $\tau$ taken as 28,100 km is thus given by:
+where $\sqrt{\hat{V}[\hat{\mu}_{\tau}]}$ is the standard error of the restricted mean given in the output of the *print* function and $Z_{1-\frac{\alpha}{2}}$ is the $(1-\frac{\alpha}{2})$ percentile of the standard normal distribution. The confidence interval of the restricted mean with $\tau$ taken as 28,100 km is thus given by:
 
 ```{r}
 22875 - ((1283)*qnorm(0.95))

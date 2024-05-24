@@ -99,7 +99,7 @@ if (window.hljs) {
 <h1>Introduction</h1>
 <p>Recently, I have been slow-reading the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger). Although the techniques presented in this book focus on applications in biology and medicine, the same statistical tools can also be applied to disciplines ranging from engineering to economics and demography. I have a background in mechanical engineering and am interested in applying survival modeling concepts to data from reliability engineering, manufacturing and quality assurance. This article is the first of, hopefully, many articles that I intend to write as I finish reading different chapters from this wonderful book.</p>
 <p>The data set(s) that I plan to analyse are the ones that have been used as examples in another book: Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual). Both the books I mentioned are excellent resources for anyone who is interested in learning more about this topic.</p>
-<p>In this article, we will analyse vehicle shock absorb-er failure time data<label for="tufte-sn-1" class="margin-toggle sidenote-number">1</label><input type="checkbox" id="tufte-sn-1" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">1</span> Failure time data is also known as survival data, life data, event-time data or reliability data, depending on the field of study.</span> and estimate a few basic survival quantities. The data contains failure times (in kilometers driven) and the mode of failure, first reported by O’Connor (1985)<label for="tufte-sn-2" class="margin-toggle sidenote-number">2</label><input type="checkbox" id="tufte-sn-2" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">2</span> O’Connor, P. D. T. (1985). <em>Practical Reliability Engineering.</em> Wiley. [54, 610]</span>. We will ignore the mode of failure for now and will only consider whether a failure occurred or not i.e. censored. In a future article, I plan to use the different failure modes to discuss competing risks from a survival analysis context.</p>
+<p>In this article, we will analyse vehicle shock absorb-er failure time data<label for="tufte-sn-1" class="margin-toggle sidenote-number">1</label><input type="checkbox" id="tufte-sn-1" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">1</span> Failure time data is also known as survival data, life data, event-time data or reliability data, depending on the field of study.</span> and estimate a few basic survival quantities. The data contains failure times (in kilometers driven) and the mode of failure, first reported by O’Connor (1985)<label for="tufte-sn-2" class="margin-toggle sidenote-number">2</label><input type="checkbox" id="tufte-sn-2" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">2</span> O’Connor, P. D. T. (1985). <em>Practical Reliability Engineering.</em> Wiley. [54, 610]</span>. We will ignore the mode of failure for now and will only consider whether a failure occurred or not i.e. censored. In a future article, I plan to use the different failure modes to discuss competing risks for time-to-failure data.</p>
 </div>
 <div id="kaplan-meir-curve" class="section level1">
 <h1>Kaplan Meir Curve</h1>
@@ -118,8 +118,7 @@ The hazard function<label for="tufte-sn-6" class="margin-toggle sidenote-number"
 <div id="motivating-example-shock-absorber-data" class="section level1">
 <h1>Motivating example: Shock Absorber Data</h1>
 <p>In this example, we are interested in finding a non-parametric estimate of the survival function in order to gauge the probability that a shock absorber will survive a certain distance before failing.</p>
-<pre class="r"><code>ShockAbsorber &lt;- read_csv(&quot;ShockAbsorber.csv&quot;)
-
+<pre class="r"><code>ShockAbsorber &lt;- read_csv(&quot;Data/ShockAbsorber.csv&quot;)
 knitr::kable((ShockAbsorber), caption = &quot;Table 1. Shock Absorber Data&quot;, align = rep(&#39;c&#39;, 3))</code></pre>
 <p><!--
 <caption>--><span class="marginnote shownote">Table 1. Shock Absorber Data</span><!--</caption>--></p>
@@ -343,8 +342,6 @@ Failure is coded as “1” and censored is coded as “0” as per convention. 
   , conf.int = 0.9
   , data = ShockAbsorber) 
 
-#plot(fit_1, xlab = &quot;Kilometers&quot;, ylab = &quot;Survival Probability&quot;)
-
 survminer::ggsurvplot(fit_1,
                       risk.table = TRUE,
                       title = &quot;Kaplan-Meir curve&quot;,
@@ -380,7 +377,7 @@ survminer::ggsurvplot(fit_1,
 ##  19000     13       5    0.784  0.0803        0.639        0.899
 ##  26000      5       3    0.539  0.1317        0.325        0.745</code></pre>
 <p>Notice that the <em>n.event</em> column in the above summary is the number of failures between two time points. For eg: there are 3 failures in the data between 19,000 km and 26,000 km.</p>
-<p>The probability that a shock absorber will last at least 19,000 km is 78.4% with a 90% confidence interval (61.5%, 88.5%).</p>
+<p>The probability that a shock absorber will last at least 19,000 km is 78.4%. It is always a good idea to present an estimate with a confidence interval, which is discussed next.</p>
 <div id="pointwise-confidence-intervals" class="section level2">
 <h2>Pointwise Confidence Intervals</h2>
 <p>The simplest confidence interval at a given time <span class="math inline">\((t_{0})\)</span> is the linear confidence interval, given by</p>
@@ -389,12 +386,13 @@ survminer::ggsurvplot(fit_1,
 <p>Although the linear confidence interval has a simple form, the normal distribution assumption used in constructing this interval is seldom valid when the sample size is small. In addition, the performance of this interval near the ends i.e <span class="math inline">\(\hat{S}(t)\)</span> close to 0 or 1 can sometimes give us CI values outside the [0,1] range, which does not make sense for a probability value. Hence, transformations are used to get better confidence intervals.</p>
 <p>Different transformations like the <em>log</em>, <em>log-log</em>, <em>logit</em>, <em>arcsin</em> are available in the <em>survival</em> package by using the <em>conf.type</em> argument<label for="tufte-sn-10" class="margin-toggle sidenote-number">10</label><input type="checkbox" id="tufte-sn-10" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">10</span> The confidence intervals obtained through different transformations may not be symmetric like the linear CI</span>. The formulas for the confidence intervals from the different transformations can be found in any survival modeling textbook<label for="tufte-sn-11" class="margin-toggle sidenote-number">11</label><input type="checkbox" id="tufte-sn-11" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">11</span> I did consider including the formulas here for educational purposes, but the Latex code for typing the formulas would have taken me a very long time.</span>. As per the text in the <em>survival</em> package documentation by Dr. Therneau: <em>“Which of the choices of log, log-log, or logit is”best” depends on the details of any
 particular simulation study”</em>. I have used the “arcsin” transformation for constructing our confidence intervals since its coverage probability tends to be a bit more conservative i.e. greater than <span class="math inline">\((1-\alpha)\)</span> for small sample sizes.</p>
+<p>The probability that a shock absorber will last at least 19,000 km is 78.4% with a 90% confidence interval (63.9%, 89.9%)..</p>
 <p>The Kaplan-Meir curve plotted above shows the confidence region around the curve. It can be seen that the interval width increases with time (distance) since the number of observations (number at risk) decrease with time, thereby increasing the standard error.</p>
 </div>
 <div id="confidence-bands" class="section level2">
 <h2>Confidence bands</h2>
-<p>The confidence intervals obtained above are valid only at a particular point <span class="math inline">\((t_{0})\)</span>. If we want a confidence interval for the survival function over a range of values of <em>t</em>, we will need to construct confidence bands. These confidence bands ensure that the statistical uncertainty is simultaneously quantified over a range of time and not just at a single point.<label for="tufte-sn-12" class="margin-toggle sidenote-number">12</label><input type="checkbox" id="tufte-sn-12" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">12</span> In other words, the confidence band guarantees, with a given confidence, that the survival function falls within the band for all <em>t</em> in some interval. I see this as being somewhat similar to the correction of the significance value <span class="math inline">\(\alpha\)</span> for multiple comparison tests.</span></p>
-<p>Note that although the Kaplan-Meir plot previously plotted shows the confidence region that looks like a band, it is based on point wise confidence intervals and is not a confidence band.</p>
+<p>The confidence intervals obtained above are only valid at a particular point <span class="math inline">\((t_{0})\)</span>. If we want a confidence interval for the survival function over a range of values of <em>t</em>, we will need to construct confidence bands. These confidence bands ensure that the statistical uncertainty is simultaneously quantified over a range of time and not just at a single point.<label for="tufte-sn-12" class="margin-toggle sidenote-number">12</label><input type="checkbox" id="tufte-sn-12" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">12</span> In other words, the confidence band guarantees, with a given confidence, that the survival function falls within the band for all <em>t</em> in some interval. I see this as being somewhat similar to the correction of the significance value <span class="math inline">\(\alpha\)</span> for multiple comparison tests.</span></p>
+<p>It is important to point out that although the Kaplan-Meir plot above shows the confidence region that looks like a band, it is based on point wise confidence intervals and is not a confidence band.</p>
 <p>We will now construct a 90% confidence band for the range 10,000 km to 20,000 km.</p>
 <p>The package <em>survMisc</em>, contains functions to build a confidence band. This package requires a “ten” object<label for="tufte-sn-13" class="margin-toggle sidenote-number">13</label><input type="checkbox" id="tufte-sn-13" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">13</span> <em>ten</em> stands for time, event(s) and number at risk.</span>, which is easily obtained as follows</p>
 <pre class="r"><code>ten_ShockAbsorber &lt;- survMisc::ten(
@@ -444,7 +442,7 @@ particular simulation study”</em>. I have used the “arcsin” transformation
 ##       n events rmean* se(rmean) median 0.9LCL 0.9UCL
 ## [1,] 38     11  22875      1283  26510  20900     NA
 ##     * restricted mean with upper limit =  28100</code></pre>
-<p>The mean time to failure (restricted) is 22,875 km. If we have some knowledge (information) from outside the sample that suggests that shock absorbers are known to have lasted until 30,000 km, we can change <span class="math inline">\(\tau\)</span> to 30,000 km and then calculate the restricted mean, as follows.</p>
+<p>The mean time to failure (restricted) is 22,875 km. Suppose we have some knowledge (information) from outside the sample data that suggests that shock absorbers are known to have lasted until 30,000 km, we can change <span class="math inline">\(\tau\)</span> to 30,000 km and then calculate the restricted mean, as follows.</p>
 <pre class="r"><code>print(fit_1, rmean = 30000)</code></pre>
 <pre><code>## Call: survfit(formula = survival::Surv(time = ShockAbsorber$Kilometers, 
 ##     event = ShockAbsorber$Event) ~ 1, data = ShockAbsorber, stype = 1, 
@@ -456,7 +454,7 @@ particular simulation study”</em>. I have used the “arcsin” transformation
 <p>We will stick to the information in the data and calculate the restricted mean with <span class="math inline">\(\tau\)</span> as the max distance from the data i.e. 28,100 km.</p>
 <p>The lower and upper interval limits shown in the output are for the median. The confidence limits for the mean can be calculated as follows:</p>
 <p><span class="math display">\[\hat{\mu}_{\tau} \pm Z_{1-\frac{\alpha}{2}} \sqrt{\hat{V}[\hat{\mu}_{\tau}]}\]</span>
-where <span class="math inline">\(\sqrt{\hat{V}[\hat{\mu}_{\tau}]}\)</span> is the standard error of the restricted mean given in the output above and <span class="math inline">\(Z_{1-\frac{\alpha}{2}}\)</span> is the <span class="math inline">\((1-\frac{\alpha}{2})\)</span> percentile of the standard normal distribution. The confidence interval of the restricted mean with <span class="math inline">\(\tau\)</span> taken as 28,100 km is thus given by:</p>
+where <span class="math inline">\(\sqrt{\hat{V}[\hat{\mu}_{\tau}]}\)</span> is the standard error of the restricted mean given in the output of the <em>print</em> function and <span class="math inline">\(Z_{1-\frac{\alpha}{2}}\)</span> is the <span class="math inline">\((1-\frac{\alpha}{2})\)</span> percentile of the standard normal distribution. The confidence interval of the restricted mean with <span class="math inline">\(\tau\)</span> taken as 28,100 km is thus given by:</p>
 <pre class="r"><code>22875 - ((1283)*qnorm(0.95))</code></pre>
 <pre><code>## [1] 20764.65</code></pre>
 <pre class="r"><code>22875 + ((1283)*qnorm(0.95))</code></pre>
