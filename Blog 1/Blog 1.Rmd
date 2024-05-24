@@ -207,6 +207,12 @@ where $\sqrt{\hat{V}[\hat{\mu}_{\tau}]}$ is the standard error of the restricted
 
 The restricted mean time to failure ($\tau$ = 28,100 km) is 22,875 km with a 90% confidence interval (20764.65, 24985.35)
 
+## End
+
+I hope you enjoyed reading this article! Any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at shishir909@gmail.com.
+
+
+
 ```{r bib, include=FALSE}
 # create a bib file for the R packages used in this document
 knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
