@@ -128,7 +128,7 @@ The probability that a shock absorber will last at least 19,000 km is 78.4%. It 
 
 ## Pointwise Confidence Intervals
 
-The simplest confidence interval at a given time $(t_{0})$ is the linear confidence interval, given by 
+The simplest confidence interval for an estimate of the survival probability at a given time $(t_{0})$ is the linear confidence interval, given by 
 
 $$\hat{S}(t_{0})\pm Z_{1-\frac{\alpha}{2}}\sigma_{s}(t_{0})\hat{S}(t_{0})$$
 
@@ -137,9 +137,9 @@ where $\sigma_{s}^2(t) = \hat{V}[\hat{S}(t)]/\hat{S}^2(t)$ and $Z_{1-\frac{\alph
 Although the linear confidence interval has a simple form, the normal distribution assumption used in constructing this interval is seldom valid when the sample size is small. In addition, the performance of this interval near the ends i.e $\hat{S}(t)$ close to 0 or 1 can sometimes give us CI values outside the [0,1] range, which does not make sense for a probability value. Hence, transformations are used to get better confidence intervals. 
 
 Different transformations like the *log*, *log-log*, *logit*, *arcsin* are available in the *survival* package by using the *conf.type* argument^[The confidence intervals obtained through different transformations may not be symmetric like the linear CI]. The formulas for the confidence intervals from the different transformations can be found in any survival modeling textbook^[I did consider including the formulas here for educational purposes, but the Latex code for typing the formulas would have taken me a very long time.]. As per the text in the *survival* package documentation by Dr. Therneau: *"Which of the choices of log, log-log, or logit is "best" depends on the details of any
-particular simulation study"*. I have used the "arcsin" transformation for constructing our confidence intervals since its coverage probability tends to be a bit more conservative i.e. greater than $(1-\alpha)$ for small sample sizes.
+particular simulation study"*. I have used the "arcsin" transformation for constructing our confidence intervals since its coverage probability tends to be a bit more conservative i.e. greater than $(1-\alpha)$ for small sample sizes, as mentioned in the book.
 
-The probability that a shock absorber will last at least 19,000 km is 78.4% with a 90% confidence interval (63.9%, 89.9%)..
+The probability that a shock absorber will last at least 19,000 km is 78.4% with a 90% confidence interval (63.9%, 89.9%).
 
 The Kaplan-Meir curve plotted above shows the confidence region around the curve. It can be seen that the interval width increases with time (distance) since the number of observations (number at risk) decrease with time, thereby increasing the standard error. 
 
