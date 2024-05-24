@@ -3,7 +3,7 @@ title: "Time to event analysis: An Introduction"
 runningheader: "Tufte Handout with R Markdown" # only for pdf output
 #subtitle: "with a motivating example from Reliability" # only for html output
 author: "Shishir Rao"
-date: "`r Sys.Date()`"
+date: "23rd May, 2024"
 output:
   tufte::tufte_html: default
   tufte::tufte_handout:

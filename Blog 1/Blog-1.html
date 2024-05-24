@@ -12,7 +12,6 @@
 
 <meta name="author" content="Shishir Rao" />
 
-<meta name="date" content="2024-05-23" />
 
 <title>Time to event analysis: An Introduction</title>
 
@@ -91,15 +90,15 @@ if (window.hljs) {
 
 <h1 class="title toc-ignore">Time to event analysis: An Introduction</h1>
 <h4 class="author">Shishir Rao</h4>
-<h4 class="date">2024-05-23</h4>
+<h4 class="date">23rd May, 2024</h4>
 
 
 
 <div id="introduction" class="section level1">
 <h1>Introduction</h1>
-<p>I am currently reading the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger). Although the techniques presented in this book focus on applications in biology and medicine, the same statistical tools can also be applied to disciplines ranging from engineering to economics and demography. Since I have a background in mechanical engineering my interest is in applying survival modeling concepts to data from reliability engineering, manufacturing and quality assurance. This article is the first of, hopefully, many articles that I intend to write as I finish reading different chapters from the book.</p>
-<p>The data set(s) that will be to analysed are the ones that have been used as examples in another book: Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual). Both the books I mentioned are excellent resources for anyone who is interested in learning more about this topic.</p>
-<p>In this article, we will analyse vehicle shock absorb-er failure time data<label for="tufte-sn-1" class="margin-toggle sidenote-number">1</label><input type="checkbox" id="tufte-sn-1" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">1</span> Failure time data is also known as survival data, life data, event-time data or reliability data, depending on the field of study.</span> and estimate a few basic survival quantities. The data contains failure times (in kilometers driven) and the mode of failure, first reported by O’Connor (1985)<label for="tufte-sn-2" class="margin-toggle sidenote-number">2</label><input type="checkbox" id="tufte-sn-2" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">2</span> O’Connor, P. D. T. (1985). <em>Practical Reliability Engineering.</em> Wiley. [54, 610]</span>. We will ignore the mode of failure for now and will only consider whether a failure occurred or not i.e. censored. In a future article, I plan to use the different failure modes to discuss competing risks for time-to-failure data.</p>
+<p>I am currently reading the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger). Although the techniques presented in this book focus on applications in biology and medicine, the same statistical tools can also be applied to disciplines ranging from engineering to economics and demography. I have a background in mechanical engineering and am interested in applying survival modeling concepts to data from reliability engineering, manufacturing and quality assurance. This article is the first of, hopefully, many articles that I intend to write as I finish reading different chapters from the book.</p>
+<p>The data set(s) that will be analysed are the ones that have been used as examples in another book: Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual). Both the books I mentioned are excellent resources for anyone who is interested in learning more about this topic.</p>
+<p>In this article, we will analyse vehicle shock absorber failure time data<label for="tufte-sn-1" class="margin-toggle sidenote-number">1</label><input type="checkbox" id="tufte-sn-1" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">1</span> Failure time data is also known as survival data, life data, event-time data or reliability data, depending on the field of study.</span> and estimate a few basic survival quantities. The data contains failure times (in kilometers driven) and the mode of failure, first reported by O’Connor (1985)<label for="tufte-sn-2" class="margin-toggle sidenote-number">2</label><input type="checkbox" id="tufte-sn-2" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">2</span> O’Connor, P. D. T. (1985). <em>Practical Reliability Engineering.</em> Wiley. [54, 610]</span>. We will ignore the mode of failure for now and will only consider whether a failure occurred or not i.e. censored. In a future article, I plan to use the different failure modes to discuss competing risks for time-to-failure data.</p>
 </div>
 <div id="kaplan-meir-curve" class="section level1">
 <h1>Kaplan Meir Curve</h1>
@@ -427,7 +426,7 @@ particular simulation study”</em>. I have used the “arcsin” transformation
 ## 18: 19000 0.78 0.0065  0.011  1  0.57  0.94
 ## 19: 19000 0.78 0.0065  0.011  1  0.57  0.94
 ##         t    S     Sv    SCV cg lower upper</code></pre>
-<p>The confidence band is expected to be wider than the pointwise confidence intervals. The lower and upper values of the 90%<label for="tufte-sn-15" class="margin-toggle sidenote-number">15</label><input type="checkbox" id="tufte-sn-15" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">15</span> Note that the calculation of the confidence bands depend on lookup tables inside the survMisc package. These tables have only been constructed for the 90%, 95% and 99% confidence leves, due to which these 3 values are the only permissible values in the CI argument to the survMisc function.</span> confidence band at 19,000 km is (51%, 91%) whereas the point wise confidence interval at 19,000 km, which we found previously, is (61.5%, 88.5%).</p>
+<p>The confidence band is expected to be wider than the pointwise confidence intervals. We have used the same <em>arc sine</em> transformation here as well. The lower and upper values of the 90%<label for="tufte-sn-15" class="margin-toggle sidenote-number">15</label><input type="checkbox" id="tufte-sn-15" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">15</span> Note that the calculation of the confidence bands depend on lookup tables inside the survMisc package. These tables have only been constructed for the 90%, 95% and 99% confidence levels, due to which these 3 values are the only permissible values in the CI argument to the survMisc function.</span> confidence band at 19,000 km is (51%, 91%) whereas the point wise confidence interval at 19,000 km, which we found previously, is (61.5%, 88.5%).</p>
 </div>
 <div id="mean-survival-time" class="section level2">
 <h2>Mean Survival Time</h2>
