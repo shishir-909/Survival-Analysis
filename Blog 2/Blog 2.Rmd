@@ -1,0 +1,92 @@
+---
+title: "Competing risks using non paramteric methods"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Application in R and Methodology" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+
+---
+
+```{r setup, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+
+library(KMsurv)
+library(survival)
+library(survMisc) ##Confidence bands not in survival package. survMisc is an extension of the survival package and contains confidence bands
+library(tidyverse)
+library(readxl)
+library(readr)
+library(survminer)
+
+setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 2")
+```
+
+# Introduction
+
+In my previous [blog post](https://rpubs.com/shishir909/1188293), I briefly discussed the survival function and the Kaplan Meir method of estimating this function from a given dataset. We applied this method to a vehicle shock absorber dataset to answer questions like "What is the probability that a vehicle shock absorber will last at least 19,000 km?". The two different modes of failure of a shock absorber (Mode 1 and Mode 2) were ignored and were treated just as a single failure. In the following post, we will consider the two modes of failures as two competing risks and answer questions like: 
+
+*"What is the probability that a vehicle shock absorber will experience a Mode 1 failure by 19,000 km and that this failure occurs before it experiences a Mode 2 failure?"*
+
+What about the other way around? i.e. 
+
+*"What is the probability that a vehicle shock absorber will experience a Mode 2 failure by 19,000 km and that this failure occurs before it experiences a Mode 1 failure?"* 
+
+The following post is divided into two parts. Part I shows the application of the *survival* package in R to a competing risks example, which in this case is the vehicle shock absorber data. Part II explains some of the methodology used in the calculation of the probabilities. Part II would be of interest to those who want to find out what is happening under the hood.
+
+## Part I: Application in R
+
+First, load the data.
+
+```{r}
+ShockAbsorber <- read_csv("Data/ShockAbsorber.csv")
+knitr::kable((ShockAbsorber), caption = "Table 1. Shock Absorber Data", align = rep('c', 3))
+```
+
+There are 3 different levels in the *Failure Mode* column above: *Censored, Mode1 and Mode2*. We need to convert this column to a factor vector and make sure that the first level of this factor is for censored observations^[This is a requirement specified in the *survival* package documentation.]. We can do this by specifying the "levels" argument in the *factor* function and making sure "Censored" is the first element of the vector. 
+
+```{r}
+
+ShockAbsorber$`Failure Mode` <- factor(ShockAbsorber$`Failure Mode`, levels = c("Censored", "Mode1", "Mode2"))
+
+levels(ShockAbsorber$`Failure Mode`)
+
+```
+
+
+
+ROUGH
+
+```{r}
+fruits <- c(rep("Orange", 2), rep("Apple", 2), rep("Banana", 1))
+
+fruits <- factor(fruits, levels = c("Orange", "Banana", "Apple"))
+
+
+fruits <- factor(fruits)
+
+```
+
+
+"In competing risks problems we are often interested not in the hazard rate but rather in some probability which summarizes our knowledge about the likelihood of the occurrence of a particular competing risk." (Rewrite in your own words)
+
+What is the probability that a shock absorber will have a mode 1 failure by 15000 km? What is the probablity that it will have a mode 2 failure by 15000 km? We are interested in finding out hos does the likelihood of mode 1 failure and mode 2 failure develop over time.
+
+
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
