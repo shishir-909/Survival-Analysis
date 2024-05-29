@@ -315,7 +315,7 @@ knitr::kable((ShockAbsorber), caption = &quot;Table 1. Shock Absorber Data&quot;
 <pre class="r"><code>ShockAbsorber$`Failure Mode` &lt;- factor(ShockAbsorber$`Failure Mode`,
                                        levels = c(&quot;Censored&quot;, &quot;Mode1&quot;, &quot;Mode2&quot;))
 
-levels(ShockAbsorber$`Failure Mode`) #Verify whether censored is the first element.</code></pre>
+levels(ShockAbsorber$`Failure Mode`) #Verify whether censored is the first level of the factor.</code></pre>
 <pre><code>## [1] &quot;Censored&quot; &quot;Mode1&quot;    &quot;Mode2&quot;</code></pre>
 <p>In the competing risks model, every subject experiences only 1 event or is censored. They do not experience multiple events. This means that the status of any given vehicle shock absorber in our dataset can only change from “entry to Mode 1” or “entry to Mode 2” or “entry to censored”. The final state is specified by the <em>Failure Mode</em> column in the table. Thie initial state, i.e. <em>entry</em> also needs to be specified for each shock absorber and this will be done by adding a column called <em>istate</em><label for="tufte-sn-2" class="margin-toggle sidenote-number">2</label><input type="checkbox" id="tufte-sn-2" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">2</span> <em>istate</em> stands for initial state</span> to the above table.</p>
 <pre class="r"><code>ShockAbsorber &lt;- ShockAbsorber %&gt;%
