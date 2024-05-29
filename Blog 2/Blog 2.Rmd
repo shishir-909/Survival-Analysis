@@ -1,9 +1,9 @@
 ---
-title: "Competing risks using non paramteric methods"
+title: "Competing Risks in Failure Time Data"
 runningheader: "Tufte Handout with R Markdown" # only for pdf output
-subtitle: "Application in R and Methodology" # only for html output
+subtitle: "Application in R and Methodology (non-parametric)" # only for html output
 author: "Shishir Rao"
-date: "`r Sys.Date()`"
+date: "29th May, 2024"
 output:
   tufte::tufte_html: default
   tufte::tufte_handout:
@@ -36,7 +36,7 @@ setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/In
 
 # Introduction
 
-In my previous [blog post](https://rpubs.com/shishir909/1188293), I briefly discussed the survival function and the Kaplan Meir method of estimating this function from a given dataset. We applied this method to a vehicle shock absorber dataset to answer questions like "What is the probability that a vehicle shock absorber will last at least 19,000 km?". The two different modes of failure of a shock absorber (Mode 1 and Mode 2) were ignored and were treated just as a single failure. In the following post, we will consider the two modes of failures as two competing risks and answer questions like: 
+In my previous [blog post](https://rpubs.com/shishir909/1188293), I briefly discussed the survival function and the Kaplan Meir method of estimating this function from a given dataset. We applied this method to a vehicle shock absorber dataset to answer questions like "What is the probability that a vehicle shock absorber will last at least 19,000 km?". The two different modes of failure of a shock absorber (Mode 1 and Mode 2) were ignored and were treated as the same type of failure. In the following post, we will consider the two modes of failures as two competing risks and answer questions like: 
 
 *"What is the probability that a vehicle shock absorber will experience a Mode 1 failure by 19,000 km and that this failure occurs before it experiences a Mode 2 failure?"*
 
@@ -44,32 +44,189 @@ What about the other way around? i.e.
 
 *"What is the probability that a vehicle shock absorber will experience a Mode 2 failure by 19,000 km and that this failure occurs before it experiences a Mode 1 failure?"* 
 
-The following post is divided into two parts. Part I shows the application of the *survival* package in R to a competing risks example, which in this case is the vehicle shock absorber data. Part II explains some of the methodology used in the calculation of the probabilities. Part II would be of interest to those who want to find out what is happening under the hood.
+The following post is divided into two parts. Part I explains some of the methodologies used in the calculation of the probabilities. Part II shows the application of the *survival* package in R to a competing risks example, which in this case is the vehicle shock absorber data. We will start with Part II and then move on to Part I.
 
-## Part I: Application in R
+# Part II: Application in R
 
 First, load the data.
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 ShockAbsorber <- read_csv("Data/ShockAbsorber.csv")
 knitr::kable((ShockAbsorber), caption = "Table 1. Shock Absorber Data", align = rep('c', 3))
 ```
 
-There are 3 different levels in the *Failure Mode* column above: *Censored, Mode1 and Mode2*. We need to convert this column to a factor vector and make sure that the first level of this factor is for censored observations^[This is a requirement specified in the *survival* package documentation.]. We can do this by specifying the "levels" argument in the *factor* function and making sure "Censored" is the first element of the vector. 
+There are 3 different levels in the *Failure Mode* column above: *Censored, Mode1* and *Mode2*. We need to convert this column to a factor vector and make sure that the first level of this factor is for censored observations^[This is a requirement specified in the *survival* package documentation.]. We can do this by specifying the "levels" argument in the *factor* function and making sure "Censored" is the first element of the vector. 
 
 ```{r}
 
-ShockAbsorber$`Failure Mode` <- factor(ShockAbsorber$`Failure Mode`, levels = c("Censored", "Mode1", "Mode2"))
+ShockAbsorber$`Failure Mode` <- factor(ShockAbsorber$`Failure Mode`,
+                                       levels = c("Censored", "Mode1", "Mode2"))
 
-levels(ShockAbsorber$`Failure Mode`)
+levels(ShockAbsorber$`Failure Mode`) #Verify whether censored is the first level of the factor.
 
 ```
 
-
-
-ROUGH
+In the competing risks model, every subject experiences only 1 event or is censored. They do not experience multiple events. This means that the status of any given vehicle shock absorber in our dataset can only change from "entry to Mode 1" or "entry to Mode 2" or "entry to censored". The final state is specified by the *Failure Mode* column in the table. Thie initial state, i.e. *entry* also needs to be specified for each shock absorber and this will be done by adding a column called *istate*^[*istate* stands for initial state] to the above table.
 
 ```{r}
+ShockAbsorber <- ShockAbsorber %>%
+  dplyr::mutate(istate = rep("entry", nrow(ShockAbsorber)))
+```
+
+Next, we fit the model and display the summary.
+
+```{r}
+fit_1 <- survival::survfit(
+  survival::Surv(time = Kilometers, event = `Failure Mode`) ~ 1,
+  data = ShockAbsorber,
+  istate = istate,
+  conf.type = "log",
+  conf.int = 0.9
+)
+
+summary(fit_1)
+```
+
+The output of the *summary* function above contains 3 columns: *Pr(entry), Pr(Mode1)* and *Pr(Mode2)*. 
+
+*Pr(entry)* is the probability of a vehicle shock absorber staying in the entry state at least till a given distance. Staying in the entry state means that it has not experienced any type of failure. This is nothing but the Kaplan Meir survival probability curve! The values in this column are identical to the survival probability values we estimated in the previous [blog post](https://rpubs.com/shishir909/1188293).
+
+*Pr(Mode1)* is the probability of a vehicle shock absorber experiencing a Mode 1 failure by a given distance, while the risk of Mode 2 failure is still active (i.e. Mode 2 failure has not yet materialized, but the risk exists).  *Pr(Mode2)* has a similar interpretation.
+
+*Pr(Mode1)* and *Pr(Mode2)*, as described above, are called *cumulative incidence functions*. We will touch on this topic in Part I later in this article.
+
+Notice that for any given distance: *Pr(entry) + Pr(Mode1) + Pr(Mode2) = 1. *
+
+Plotting all three probabilities on the same figure, we get 
+
+```{r}
+plot(
+  fit_1,
+  col = c("black", "red", "green"),
+  lwd = 2,
+  ylab = "Probability in state",
+  xlab = "Kilometers"
+)
+
+text(
+  2500,
+  y = c(0.7, 0.6, 0.5),
+  pos = 4,
+  labels = c(
+    "Black = Pr(Entry)",
+    "Red = Pr(Mode 1)",
+    "Green = Pr(Mode 2)"
+  )
+)
+```
+
+The plot shows that for the range of distances in our dataset, the *Pr(Mode1)* is higher than *Pr(Mode2)* at most locations, barring a few exceptions. We have data from 11 failures only, and the rest are censored values. Additional failure data would most probably help in reducing the uncertainty in our estimates and make a better comparison between the two modes. Nevertheless, we can still extract some insights. For example, at 19,000 km, the probabilities and their 90% confidence intervals (log transformed) are given below. 
+
+
+```{r}
+
+x = summary(fit_1, times = c(19000))
+summary_19k <- data.frame(
+  "CI" = c(x$pstate[2], x$pstate[3]),
+  "90% Lower CI" = c(x$lower[2], x$lower[3]),
+  "90% Upper CI" = c(x$upper[2], x$upper[3]),
+  check.names = FALSE
+)
+
+
+rownames(summary_19k) <- c("Pr(Mode 1)", "Pr(Mode 2)")
+summary_19k <- round(summary_19k, digits = 2)
+
+knitr::kable((summary_19k), caption = "Table 2. Summary Table", align = rep('c', 3))
+
+
+```
+
+The probability of a Mode 1 failure within 19,000 km, while the risk of a Mode 2 failure is active is 0.15 with a 90% confidence interval (0.03,0.27). We can make a similar statement about Mode 2 failure by 19,000 km using the quantities in the table above.
+
+
+# Part I: Methodology
+
+Suppose we have $l = 1,..,m$ competing risks. We are interested in finding out the probability of a particular risk $l$ failure (event) occurring before time $t$, while all the other $m-1$ risks are acting on the subject^[In other words, it is the probability of a particular risk $l$ failure occurring before time $t$, and that it occurs before any of the other competing risks occur.]. This is also called *crude* probability and is expressed by the *cumulative incidence funcion*.
+
+$$F_{l}(t) = P[T\le t,\delta = l]$$
+where $T$ is the time-to-event random variable and $\delta$ is an indicator for risk $l$.
+
+For non-parametric methods, the cumulative incidence function for risk $l$ is given by 
+
+$$CI_{l}(t) = 0 \quad \text{ if }t<t_{1}\\$$
+and 
+$$CI_{l}(t) = \sum_{t_{i} \le t} \Bigg\{\prod_{j=1}^{i-1} [1 - \frac{(d_{j} + r_{j})}{Y_{j}}]\Bigg\}\frac{r_{i}}{Y_{i}} \quad \text{ if }t\ge t_{1}\\$$
+where $t_{i} = \{t_{1},t_{2}..\}$ are the event times in our dataset (not censored). $r_{j}$ is the number of events of risk $l$ at time $t_{j}$ and $d_{j}$ is the number of events of all the other competing risks at time $t_{j}$.
+
+Notice that the term inside the braces is the Kaplan Meir estimate of the survival function evaluated just before $t_{i}$ i.e.
+
+$$CI_{l}(t) = \sum_{t_{i} \le t} \Bigg\{\hat{S}(t_{i-})\Bigg\}\frac{r_{i}}{Y_{i}} \quad \text{ if }t\ge t_{1}\\$$
+
+In the vehicle shock absorber example, we have 2 competing risks, Mode 1 and Mode 2. So, $l = 1,2$. The following table gives the values of the quantities required to calculate the cumulative incidence function as well as the cumulative incidence function at the different event times (distances). 
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+summary_fit_1 <- summary(fit_1)
+
+summary_fit_1$time
+
+calculation_table <- data.frame(
+  t_i = summary_fit_1$time,
+  r_i = c(1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1),
+  d_i = c(0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 0),
+  Y_i = summary_fit_1$n.risk[, 1],
+  KM_curve_minus1 = head(c(1, summary_fit_1$pstate[, 1]), -1)
+)
+
+calculation_table <- calculation_table %>%
+  dplyr::mutate(Pr_Model1_Intermediate = KM_curve_minus1 * (r_i / Y_i)) %>%
+  dplyr::mutate(Pr_Mode1 = cumsum(Pr_Model1_Intermediate))
+
+calculation_table <- round(calculation_table, digits = 4) %>%
+  dplyr::select(!c(Pr_Model1_Intermediate))
+
+names(calculation_table) <- c("$t_{i}$",
+                              "$r_{i}$",
+                              "$d_{i}$",
+                              "$Y_{i}$",
+                              "${S}(t_{i-})$",
+                              "$Pr(Mode 1)$")
+```
+
+
+```{r}
+knitr::kable((calculation_table),
+             caption = "Table 3. Calculation Table",
+             align = rep('c', 4))
+
+```
+
+The values of the cumulative incidence function in the above table, obtained using the aforementioned formula match the values we get from the *survival* package.
+
+The fifth column in the above table is the estimated survival function^[Note that this should be $\hat{S}(t_{i-})$ and not ${S}(t_{i-})$ since it is an estimate. I was unable to include the "hat" on top of the $S$ in the table using the *knitr* package.] just before time $t_{i}$. 
+
+The variance of the cumulative incidence function for a particular risk $l$ is estimated by
+
+$$\hat{V}[\hat{CI_{l}}(t)] = \sum_{t_{i} \le t} \hat{S}(t_{i})^2\Bigg\{[\hat{CI_{l}}(t) - \hat{CI_{l}}(t_{i})]^2\frac{r_{i}+d_{i}}{Y_{i}^2}+[1-2(\hat{CI_{l}(t)}-\hat{CI_{l}}(t_{i}))]\frac{r_{i}}{Y_{i}^2}\Bigg\}$$
+Plugging the appropriate values in the above formula and taking the square root will yield the same standard error values from the model fit using the *survival* package. The standard errors can then be used to calculate confidence intervals.
+
+## Acknowledgements
+
+1. Most of what I have learnt about time-to-event analysis is from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger).
+
+2. The dataset I have used above is used in one of the examples in the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual).
+
+3. This article's format is a style that Edward Tufte uses in his books and handouts. I have used the *tufte* library in R and am grateful to the authors of this package. I should also mention that I found out about this style when I stumbled across an article on Survival Analysis by Mark Bounthavong, which was also written using the *tufte* package.
+
+## End
+
+I hope you enjoyed reading this blog post! If you have any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at shishir909@gmail.com.
+
+```{r eval=FALSE, include=FALSE}
+#ROUGH
+
+fit_1$std.err
+
 fruits <- c(rep("Orange", 2), rep("Apple", 2), rep("Banana", 1))
 
 fruits <- factor(fruits, levels = c("Orange", "Banana", "Apple"))
@@ -77,12 +234,32 @@ fruits <- factor(fruits, levels = c("Orange", "Banana", "Apple"))
 
 fruits <- factor(fruits)
 
+df <- data.frame(id = rep(1:3, each = 5),
+                 hour = rep(1:5, 3),
+                 value = sample(1:15))
+
+mutate(group_by(df), csum=cumsum(value))
+
+##Checking confidence interval calca
+
+ShockAbsorber <- ShockAbsorber %>%
+  dplyr::mutate(Event = case_when(
+    `Censoring Indicator` == "Failed" ~ 1,
+    `Censoring Indicator` == "Censored" ~ 0
+  ))
+
+fit_2 <- survival::survfit(
+  survival::Surv(
+    time = ShockAbsorber$Kilometers, 
+    event = ShockAbsorber$Event) ~ 1 #Right hand formula for a single curve
+  , stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  , ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  , conf.type = "log"
+  , conf.int = 0.9
+  , data = ShockAbsorber) 
+
+
 ```
-
-
-"In competing risks problems we are often interested not in the hazard rate but rather in some probability which summarizes our knowledge about the likelihood of the occurrence of a particular competing risk." (Rewrite in your own words)
-
-What is the probability that a shock absorber will have a mode 1 failure by 15000 km? What is the probablity that it will have a mode 2 failure by 15000 km? We are interested in finding out hos does the likelihood of mode 1 failure and mode 2 failure develop over time.
 
 
 

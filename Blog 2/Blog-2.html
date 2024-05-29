@@ -12,9 +12,8 @@
 
 <meta name="author" content="Shishir Rao" />
 
-<meta name="date" content="2024-05-27" />
 
-<title>Competing risks using non paramteric tools</title>
+<title>Competing Risks in Failure Time Data</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -89,22 +88,468 @@ if (window.hljs) {
 
 
 
-<h1 class="title toc-ignore">Competing risks using non paramteric tools</h1>
-<h3 class="subtitle">Application in R and Methodology</h3>
+<h1 class="title toc-ignore">Competing Risks in Failure Time Data</h1>
+<h3 class="subtitle">Application in R and Methodology (non-parametric)</h3>
 <h4 class="author">Shishir Rao</h4>
-<h4 class="date">2024-05-27</h4>
+<h4 class="date">29th May, 2024</h4>
 
 
 
 <div id="introduction" class="section level1">
 <h1>Introduction</h1>
-<p>In my previous <a href="https://rpubs.com/shishir909/1188293">blog post</a>, I briefly discussed the survival function and the Kaplan Meir method of estimating this function from a given dataset. We applied this method to a vehicle shock absorber dataset to answer questions like “What is the probability that a vehicle shock absorber will last at least 19,000 km?”. The two different modes of failure of a shock absorber (Mode 1 and Mode 2) were ignored and were treated just as a single failure. In the following post, we will consider the two modes of failures as two competing risks and answer questions like:</p>
+<p>In my previous <a href="https://rpubs.com/shishir909/1188293">blog post</a>, I briefly discussed the survival function and the Kaplan Meir method of estimating this function from a given dataset. We applied this method to a vehicle shock absorber dataset to answer questions like “What is the probability that a vehicle shock absorber will last at least 19,000 km?”. The two different modes of failure of a shock absorber (Mode 1 and Mode 2) were ignored and were treated as the same type of failure. In the following post, we will consider the two modes of failures as two competing risks and answer questions like:</p>
 <p><em>“What is the probability that a vehicle shock absorber will experience a Mode 1 failure by 19,000 km and that this failure occurs before it experiences a Mode 2 failure?”</em></p>
 <p>What about the other way around? i.e. </p>
 <p><em>“What is the probability that a vehicle shock absorber will experience a Mode 2 failure by 19,000 km and that this failure occurs before it experiences a Mode 1 failure?”</em></p>
-<p>The following post is divided into two parts. Part is an application</p>
-<p>“In competing risks problems we are often interested not in the hazard rate but rather in some probability which summarizes our knowledge about the likelihood of the occurrence of a particular competing risk.” (Rewrite in your own words)</p>
-<p>What is the probability that a shock absorber will have a mode 1 failure by 15000 km? What is the probablity that it will have a mode 2 failure by 15000 km? We are interested in finding out hos does the likelihood of mode 1 failure and mode 2 failure develop over time.</p>
+<p>The following post is divided into two parts. Part I explains some of the methodologies used in the calculation of the probabilities. Part II shows the application of the <em>survival</em> package in R to a competing risks example, which in this case is the vehicle shock absorber data. We will start with Part II and then move on to Part I.</p>
+</div>
+<div id="part-ii-application-in-r" class="section level1">
+<h1>Part II: Application in R</h1>
+<p>First, load the data.</p>
+<pre class="r"><code>ShockAbsorber &lt;- read_csv(&quot;Data/ShockAbsorber.csv&quot;)
+knitr::kable((ShockAbsorber), caption = &quot;Table 1. Shock Absorber Data&quot;, align = rep(&#39;c&#39;, 3))</code></pre>
+<p><!--
+<caption>--><span class="marginnote shownote">Table 1. Shock Absorber Data</span><!--</caption>--></p>
+<table>
+<thead>
+<tr class="header">
+<th align="center">Kilometers</th>
+<th align="center">Failure Mode</th>
+<th align="center">Censoring Indicator</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">6700</td>
+<td align="center">Mode1</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="even">
+<td align="center">6950</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">7820</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">8790</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">9120</td>
+<td align="center">Mode2</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="even">
+<td align="center">9660</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">9820</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">11310</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">11690</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">11850</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">11880</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">12140</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">12200</td>
+<td align="center">Mode1</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="even">
+<td align="center">12870</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">13150</td>
+<td align="center">Mode2</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="even">
+<td align="center">13330</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">13470</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">14040</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">14300</td>
+<td align="center">Mode1</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="even">
+<td align="center">17520</td>
+<td align="center">Mode1</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="odd">
+<td align="center">17540</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">17890</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">18450</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">18960</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">18980</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">19410</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">20100</td>
+<td align="center">Mode2</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="even">
+<td align="center">20100</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">20150</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">20320</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="odd">
+<td align="center">20900</td>
+<td align="center">Mode2</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="even">
+<td align="center">22700</td>
+<td align="center">Mode1</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="odd">
+<td align="center">23490</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">26510</td>
+<td align="center">Mode1</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="odd">
+<td align="center">27410</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">27490</td>
+<td align="center">Mode1</td>
+<td align="center">Failed</td>
+</tr>
+<tr class="odd">
+<td align="center">27890</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+<tr class="even">
+<td align="center">28100</td>
+<td align="center">Censored</td>
+<td align="center">Censored</td>
+</tr>
+</tbody>
+</table>
+<p>There are 3 different levels in the <em>Failure Mode</em> column above: <em>Censored, Mode1</em> and <em>Mode2</em>. We need to convert this column to a factor vector and make sure that the first level of this factor is for censored observations<label for="tufte-sn-1" class="margin-toggle sidenote-number">1</label><input type="checkbox" id="tufte-sn-1" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">1</span> This is a requirement specified in the <em>survival</em> package documentation.</span>. We can do this by specifying the “levels” argument in the <em>factor</em> function and making sure “Censored” is the first element of the vector.</p>
+<pre class="r"><code>ShockAbsorber$`Failure Mode` &lt;- factor(ShockAbsorber$`Failure Mode`,
+                                       levels = c(&quot;Censored&quot;, &quot;Mode1&quot;, &quot;Mode2&quot;))
+
+levels(ShockAbsorber$`Failure Mode`) #Verify whether censored is the first element.</code></pre>
+<pre><code>## [1] &quot;Censored&quot; &quot;Mode1&quot;    &quot;Mode2&quot;</code></pre>
+<p>In the competing risks model, every subject experiences only 1 event or is censored. They do not experience multiple events. This means that the status of any given vehicle shock absorber in our dataset can only change from “entry to Mode 1” or “entry to Mode 2” or “entry to censored”. The final state is specified by the <em>Failure Mode</em> column in the table. Thie initial state, i.e. <em>entry</em> also needs to be specified for each shock absorber and this will be done by adding a column called <em>istate</em><label for="tufte-sn-2" class="margin-toggle sidenote-number">2</label><input type="checkbox" id="tufte-sn-2" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">2</span> <em>istate</em> stands for initial state</span> to the above table.</p>
+<pre class="r"><code>ShockAbsorber &lt;- ShockAbsorber %&gt;%
+  dplyr::mutate(istate = rep(&quot;entry&quot;, nrow(ShockAbsorber)))</code></pre>
+<p>Next, we fit the model and display the summary.</p>
+<pre class="r"><code>fit_1 &lt;- survival::survfit(
+  survival::Surv(time = Kilometers, event = `Failure Mode`) ~ 1,
+  data = ShockAbsorber,
+  istate = istate,
+  conf.type = &quot;log&quot;,
+  conf.int = 0.9
+)
+
+summary(fit_1)</code></pre>
+<pre><code>## Call: survfit(formula = survival::Surv(time = Kilometers, event = `Failure Mode`) ~ 
+##     1, data = ShockAbsorber, istate = istate, conf.type = &quot;log&quot;, 
+##     conf.int = 0.9)
+## 
+##   time n.risk n.event Pr(entry) Pr(Mode1) Pr(Mode2)
+##   6700     38       1     0.974    0.0263    0.0000
+##   9120     34       1     0.945    0.0263    0.0286
+##  12200     26       1     0.909    0.0627    0.0286
+##  13150     24       1     0.871    0.0627    0.0665
+##  14300     20       1     0.827    0.1062    0.0665
+##  17520     19       1     0.784    0.1497    0.0665
+##  20100     12       1     0.718    0.1497    0.1318
+##  20900      8       1     0.629    0.1497    0.2216
+##  22700      7       1     0.539    0.2396    0.2216
+##  26510      5       1     0.431    0.3473    0.2216
+##  27490      3       1     0.287    0.4910    0.2216</code></pre>
+<p>The output of the <em>summary</em> function above contains 3 columns: <em>Pr(entry), Pr(Mode1)</em> and <em>Pr(Mode2)</em>.</p>
+<p><em>Pr(entry)</em> is the probability of a vehicle shock absorber staying in the entry state at least till a given distance. Staying in the entry state means that it has not experienced any type of failure. This is nothing but the Kaplan Meir survival probability curve! The values in this column are identical to the survival probability values we estimated in the previous <a href="https://rpubs.com/shishir909/1188293">blog post</a>.</p>
+<p><em>Pr(Mode1)</em> is the probability of a vehicle shock absorber experiencing a Mode 1 failure by a given distance, while the risk of Mode 2 failure is still active (i.e. Mode 2 failure has not yet materialized, but the risk exists). <em>Pr(Mode2)</em> has a similar interpretation.</p>
+<p><em>Pr(Mode1)</em> and <em>Pr(Mode2)</em>, as described above, are called <em>cumulative incidence functions</em>. We will touch on this topic in Part I later in this article.</p>
+<p>Notice that for any given distance: <em>Pr(entry) + Pr(Mode1) + Pr(Mode2) = 1. </em></p>
+<p>Plotting all three probabilities on the same figure, we get</p>
+<pre class="r"><code>plot(
+  fit_1,
+  col = c(&quot;black&quot;, &quot;red&quot;, &quot;green&quot;),
+  lwd = 2,
+  ylab = &quot;Probability in state&quot;,
+  xlab = &quot;Kilometers&quot;
+)
+
+text(
+  2500,
+  y = c(0.7, 0.6, 0.5),
+  pos = 4,
+  labels = c(
+    &quot;Black = Pr(Entry)&quot;,
+    &quot;Red = Pr(Mode 1)&quot;,
+    &quot;Green = Pr(Mode 2)&quot;
+  )
+)</code></pre>
+<p><img src="data:image/png;base64,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" width="672" /></p>
+<p>The plot shows that for the range of distances in our dataset, the <em>Pr(Mode1)</em> is higher than <em>Pr(Mode2)</em> at most locations, barring a few exceptions. We have data from 11 failures only, and the rest are censored values. Additional failure data would most probably help in reducing the uncertainty in our estimates and make a better comparison between the two modes. Nevertheless, we can still extract some insights. For example, at 19,000 km, the probabilities and their 90% confidence intervals (log transformed) are given below.</p>
+<pre class="r"><code>x = summary(fit_1, times = c(19000))
+summary_19k &lt;- data.frame(
+  &quot;CI&quot; = c(x$pstate[2], x$pstate[3]),
+  &quot;90% Lower CI&quot; = c(x$lower[2], x$lower[3]),
+  &quot;90% Upper CI&quot; = c(x$upper[2], x$upper[3]),
+  check.names = FALSE
+)
+
+
+rownames(summary_19k) &lt;- c(&quot;Pr(Mode 1)&quot;, &quot;Pr(Mode 2)&quot;)
+summary_19k &lt;- round(summary_19k, digits = 2)
+
+knitr::kable((summary_19k), caption = &quot;Table 2. Summary Table&quot;, align = rep(&#39;c&#39;, 3))</code></pre>
+<p><!--
+<caption>--><span class="marginnote shownote">Table 2. Summary Table</span><!--</caption>--></p>
+<table>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="center">CI</th>
+<th align="center">90% Lower CI</th>
+<th align="center">90% Upper CI</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Pr(Mode 1)</td>
+<td align="center">0.15</td>
+<td align="center">0.07</td>
+<td align="center">0.33</td>
+</tr>
+<tr class="even">
+<td align="left">Pr(Mode 2)</td>
+<td align="center">0.07</td>
+<td align="center">0.02</td>
+<td align="center">0.21</td>
+</tr>
+</tbody>
+</table>
+<p>The probability of a Mode 1 failure within 19,000 km, while the risk of a Mode 2 failure is active is 0.15 with a 90% confidence interval (0.03,0.27). We can make a similar statement about Mode 2 failure by 19,000 km using the quantities in the table above.</p>
+</div>
+<div id="part-i-methodology" class="section level1">
+<h1>Part I: Methodology</h1>
+<p>Suppose we have <span class="math inline">\(l = 1,..,m\)</span> competing risks. We are interested in finding out the probability of a particular risk <span class="math inline">\(l\)</span> failure (event) occurring before time <span class="math inline">\(t\)</span>, while all the other <span class="math inline">\(m-1\)</span> risks are acting on the subject<label for="tufte-sn-3" class="margin-toggle sidenote-number">3</label><input type="checkbox" id="tufte-sn-3" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">3</span> In other words, it is the probability of a particular risk <span class="math inline">\(l\)</span> failure occurring before time <span class="math inline">\(t\)</span>, and that it occurs before any of the other competing risks occur.</span>. This is also called <em>crude</em> probability and is expressed by the <em>cumulative incidence funcion</em>.</p>
+<p><span class="math display">\[F_{l}(t) = P[T\le t,\delta = l]\]</span>
+where <span class="math inline">\(T\)</span> is the time-to-event random variable and <span class="math inline">\(\delta\)</span> is an indicator for risk <span class="math inline">\(l\)</span>.</p>
+<p>For non-parametric methods, the cumulative incidence function for risk <span class="math inline">\(l\)</span> is given by</p>
+<p><span class="math display">\[CI_{l}(t) = 0 \quad \text{ if }t&lt;t_{1}\\\]</span>
+and
+<span class="math display">\[CI_{l}(t) = \sum_{t_{i} \le t} \Bigg\{\prod_{j=1}^{i-1} [1 - \frac{(d_{j} + r_{j})}{Y_{j}}]\Bigg\}\frac{r_{i}}{Y_{i}} \quad \text{ if }t\ge t_{1}\\\]</span>
+where <span class="math inline">\(t_{i} = \{t_{1},t_{2}..\}\)</span> are the event times in our dataset (not censored). <span class="math inline">\(r_{j}\)</span> is the number of events of risk <span class="math inline">\(l\)</span> at time <span class="math inline">\(t_{j}\)</span> and <span class="math inline">\(d_{j}\)</span> is the number of events of all the other competing risks at time <span class="math inline">\(t_{j}\)</span>.</p>
+<p>Notice that the term inside the braces is the Kaplan Meir estimate of the survival function evaluated just before <span class="math inline">\(t_{i}\)</span> i.e.</p>
+<p><span class="math display">\[CI_{l}(t) = \sum_{t_{i} \le t} \Bigg\{\hat{S}(t_{i-})\Bigg\}\frac{r_{i}}{Y_{i}} \quad \text{ if }t\ge t_{1}\\\]</span></p>
+<p>In the vehicle shock absorber example, we have 2 competing risks, Mode 1 and Mode 2. So, <span class="math inline">\(l = 1,2\)</span>. The following table gives the values of the quantities required to calculate the cumulative incidence function as well as the cumulative incidence function at the different event times (distances).</p>
+<pre class="r"><code>knitr::kable((calculation_table),
+             caption = &quot;Table 3. Calculation Table&quot;,
+             align = rep(&#39;c&#39;, 4))</code></pre>
+<p><!--
+<caption>--><span class="marginnote shownote">Table 3. Calculation Table</span><!--</caption>--></p>
+<table>
+<thead>
+<tr class="header">
+<th align="center"><span class="math inline">\(t_{i}\)</span></th>
+<th align="center"><span class="math inline">\(r_{i}\)</span></th>
+<th align="center"><span class="math inline">\(d_{i}\)</span></th>
+<th align="center"><span class="math inline">\(Y_{i}\)</span></th>
+<th align="center"><span class="math inline">\({S}(t_{i-})\)</span></th>
+<th align="center"><span class="math inline">\(Pr(Mode 1)\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">6700</td>
+<td align="center">1</td>
+<td align="center">0</td>
+<td align="center">38</td>
+<td align="center">1.0000</td>
+<td align="center">0.0263</td>
+</tr>
+<tr class="even">
+<td align="center">9120</td>
+<td align="center">0</td>
+<td align="center">1</td>
+<td align="center">34</td>
+<td align="center">0.9737</td>
+<td align="center">0.0263</td>
+</tr>
+<tr class="odd">
+<td align="center">12200</td>
+<td align="center">1</td>
+<td align="center">0</td>
+<td align="center">26</td>
+<td align="center">0.9450</td>
+<td align="center">0.0627</td>
+</tr>
+<tr class="even">
+<td align="center">13150</td>
+<td align="center">0</td>
+<td align="center">1</td>
+<td align="center">24</td>
+<td align="center">0.9087</td>
+<td align="center">0.0627</td>
+</tr>
+<tr class="odd">
+<td align="center">14300</td>
+<td align="center">1</td>
+<td align="center">0</td>
+<td align="center">20</td>
+<td align="center">0.8708</td>
+<td align="center">0.1062</td>
+</tr>
+<tr class="even">
+<td align="center">17520</td>
+<td align="center">1</td>
+<td align="center">0</td>
+<td align="center">19</td>
+<td align="center">0.8273</td>
+<td align="center">0.1497</td>
+</tr>
+<tr class="odd">
+<td align="center">20100</td>
+<td align="center">0</td>
+<td align="center">1</td>
+<td align="center">12</td>
+<td align="center">0.7838</td>
+<td align="center">0.1497</td>
+</tr>
+<tr class="even">
+<td align="center">20900</td>
+<td align="center">0</td>
+<td align="center">1</td>
+<td align="center">8</td>
+<td align="center">0.7184</td>
+<td align="center">0.1497</td>
+</tr>
+<tr class="odd">
+<td align="center">22700</td>
+<td align="center">1</td>
+<td align="center">0</td>
+<td align="center">7</td>
+<td align="center">0.6286</td>
+<td align="center">0.2396</td>
+</tr>
+<tr class="even">
+<td align="center">26510</td>
+<td align="center">1</td>
+<td align="center">0</td>
+<td align="center">5</td>
+<td align="center">0.5388</td>
+<td align="center">0.3473</td>
+</tr>
+<tr class="odd">
+<td align="center">27490</td>
+<td align="center">1</td>
+<td align="center">0</td>
+<td align="center">3</td>
+<td align="center">0.4311</td>
+<td align="center">0.4910</td>
+</tr>
+</tbody>
+</table>
+<p>The values of the cumulative incidence function in the above table, obtained using the aforementioned formula match the values we get from the <em>survival</em> package.</p>
+<p>The fifth column in the above table is the estimated survival function<label for="tufte-sn-4" class="margin-toggle sidenote-number">4</label><input type="checkbox" id="tufte-sn-4" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">4</span> Note that this should be <span class="math inline">\(\hat{S}(t_{i-})\)</span> and not <span class="math inline">\({S}(t_{i-})\)</span> since it is an estimate. I was unable to include the “hat” on top of the <span class="math inline">\(S\)</span> in the table using the <em>knitr</em> package.</span> just before time <span class="math inline">\(t_{i}\)</span>.</p>
+<p>The variance of the cumulative incidence function for a particular risk <span class="math inline">\(l\)</span> is estimated by</p>
+<p><span class="math display">\[\hat{V}[\hat{CI_{l}}(t)] = \sum_{t_{i} \le t} \hat{S}(t_{i})^2\Bigg\{[\hat{CI_{l}}(t) - \hat{CI_{l}}(t_{i})]^2\frac{r_{i}+d_{i}}{Y_{i}^2}+[1-2(\hat{CI_{l}(t)}-\hat{CI_{l}}(t_{i}))]\frac{r_{i}}{Y_{i}^2}\Bigg\}\]</span>
+Plugging the appropriate values in the above formula and taking the square root will yield the same standard error values from the model fit using the <em>survival</em> package. The standard errors can then be used to calculate confidence intervals.</p>
+<div id="acknowledgements" class="section level2">
+<h2>Acknowledgements</h2>
+<ol style="list-style-type: decimal">
+<li><p>Most of what I have learnt about time-to-event analysis is from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger).</p></li>
+<li><p>The dataset I have used above is used in one of the examples in the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual).</p></li>
+<li><p>This article’s format is a style that Edward Tufte uses in his books and handouts. I have used the <em>tufte</em> library in R and am grateful to the authors of this package. I should also mention that I found out about this style when I stumbled across an article on Survival Analysis by Mark Bounthavong, which was also written using the <em>tufte</em> package.</p></li>
+</ol>
+</div>
+<div id="end" class="section level2">
+<h2>End</h2>
+<p>I hope you enjoyed reading this blog post! If you have any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at <a href="mailto:shishir909@gmail.com" class="email">shishir909@gmail.com</a>.</p>
+</div>
 </div>
 
 
