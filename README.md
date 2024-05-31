@@ -4,5 +4,5 @@ Recently, I have been slow-reading the book Survival Analysis: Techniques for Ce
 
 As I finish reading a specific chapter from the Survival Analysis book, I will pick a relevant dataset from the second book in order to illustrate application of the methods learnt. I will extensively use the "survival" package in R wherever possible. This README will be updated after every post. 
 
-## Article 1: Time to event analysis: An Introduction (Blog 1/Blog-1.html) 
+## Article 1: Time to event analysis: An Introduction (https://rpubs.com/shishir909/1188293) 
 ## Article 2: Competing Risks in Failure Time Data (https://rpubs.com/shishir909/1190065)
