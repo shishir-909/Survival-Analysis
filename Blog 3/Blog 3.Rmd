@@ -1,0 +1,84 @@
+---
+title: "Hypothesis Testing in Failure Time Data"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Application in R using non-parametric methods" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+
+library(KMsurv)
+library(survival)
+library(survMisc) ##Confidence bands not in survival package. survMisc is an extension of the survival package and contains confidence bands
+library(tidyverse)
+library(readxl)
+library(readr)
+library(survminer)
+
+setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 3")
+```
+
+Working out the test first before writing the article
+
+```{r}
+circuitPack <- read_csv("Data/CircuitPack05.csv")
+
+circuitPack <- circuitPack %>%
+  dplyr::mutate(Status = case_when(`Censoring Indicator` == "Failure" ~ 1, `Censoring Indicator` == "Censored" ~ 0)) %>% 
+  dplyr::rename(Vendor = `Vendor Number`)
+  
+  
+
+str(circuitPack)
+
+#Build Kaplan Meir curve for the 2 vendors
+
+fit_1 <- survival::survfit(
+  survival::Surv(time = Days, event = Status, type = 'right') ~ Vendor,
+  data = circuitPack,
+  weights = Count,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary(fit_1, digits = 2)
+plot(fit_1, ylim = c(0.97,1))
+
+ggsurvplot(fit_1, data = circuitPack, risk.table = TRUE, ylim = c(0.97,1))
+```
+
+
+```{r eval=FALSE, include=FALSE}
+circuitPack$`Vendor Number` <- factor(circuitPack$`Vendor Number`,levels = c("Vendor1","Vendor2"))
+
+levels(circuitPack$`Vendor Number`)
+
+
+ggsurvplot(fit_1, data = circuitPack, risk.table = TRUE)
+plot.survfit(fit_1)
+par("mar")
+par(mar=c(2,2,2,2))
+plot_obj <- plot(fit_1, cumhaz = F)
+survminer::ggsurvplot(fit_1,
+                      risk.table = FALSE,
+                      title = "Kaplan-Meir curve",
+                      xlab = "Days")
+
+```
+
+

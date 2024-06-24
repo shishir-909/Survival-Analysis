@@ -1,0 +1,465 @@
+---
+title: "Hypothesis Testing in Failure Time Data"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Application in R using non-parametric methods" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+
+```{r setup, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+
+library(KMsurv)
+library(survival)
+library(survMisc) ##Confidence bands not in survival package. survMisc is an extension of the survival package and contains confidence bands
+library(tidyverse)
+library(readxl)
+library(readr)
+library(survminer)
+
+setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 3")
+```
+
+Working out the test first before writing the article
+
+```{r}
+circuitPack <- read_csv("Data/CircuitPack05.csv")
+
+circuitPack <- circuitPack %>%
+  dplyr::mutate(Status = case_when(`Censoring Indicator` == "Failure" ~ 1, `Censoring Indicator` == "Censored" ~ 0)) %>% 
+  dplyr::rename(Vendor = `Vendor Number`)
+  
+  
+
+#str(circuitPack)
+
+#Build Kaplan Meir curve for the 2 Vendors
+
+fit <- survival::survfit(
+  survival::Surv(time = Days, event = Status, type = 'right') ~ Vendor,
+  data = circuitPack,
+  weights = Count,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary(fit, digits = 2)
+#plot(fit, ylim = c(0.97,1))
+
+ggsurvplot(fit, data = circuitPack, risk.table = T, ylim = c(0.95,1),  conf.int = T, pval = T, pval.method = T, pval.coord = c(50,0.97), pval.method.coord = c(50,0.96))
+
+#ylim = c(0.95,1),
+#Log rank test with weight = 1
+
+survival::survdiff(survival::Surv(time = Days, event = Status, type = 'right') ~ Vendor, data = circuitPack,rho = 0) ##rho = 0 gives log rank test
+
+
+
+```
+
+The above log rank test (with rho = 0) gives a p-value of 0.8. This is incorrect. Why? Because the "survdiff" function doesn't have an argument for "weights", which is the frequency count of the number of observations at each time. We used "weights" in the survfit function for this, but there is no such option for survdiff. Lets calculate the log rank test manually and see what we get. 
+
+The pointwise CI shows a lot of overlap (see ggsurvplot plot). So, I am expecting the logrank test p-value to be insignificant i.e (> 0.05) 
+
+I will manually prepare a table like Table 7.2 so I can try different weights suggested by Klein Moescheberger. This will also allow me to check whether comparisons through the "survMisc" package values match my manual calculations or not. 
+
+I have previously created this manual table in Exercise 7.3. So, I am going to use that same code with a few modifications.
+
+```{r}
+
+
+t.i <- sort(unique(circuitPack$Days[which(circuitPack$Status == 1)]))
+
+##Fit the Kaplan Meir curve to the first group.
+
+fit_1 <- survival::survfit(
+  survival::Surv(
+    time = circuitPack$Days[which(circuitPack$Vendor == "Vendor1")]
+    ,
+    event = circuitPack$Status[which(circuitPack$Vendor == "Vendor1")]
+    ,
+    type = "right"
+  ) ~ 1 #Right hand formula for a single curve. It will use Turnbull iterative process for datasets containing left and right censored data.
+  ,
+  stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  ,
+  ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  ,
+  data = circuitPack,
+  weights = Count[which(circuitPack$Vendor == "Vendor1")],
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit1 <- summary(fit_1)
+
+group1 <- data.frame(Time = summary_fit1$time,
+                     Events = summary_fit1$n.event,
+                     At_risk = summary_fit1$n.risk)
+
+##Fit the Kaplan Meir curve to the second group.
+
+fit_2 <- survival::survfit(
+  survival::Surv(
+    time = circuitPack$Days[which(circuitPack$Vendor == "Vendor2")]
+    ,
+    event = circuitPack$Status[which(circuitPack$Vendor == "Vendor2")]
+    ,
+    type = "right"
+  ) ~ 1 #Right hand formula for a single curve. It will use Turnbull iterative process for datasets containing left and right censored data.
+  ,
+  stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  ,
+  ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  ,
+  data = circuitPack,
+  weights = Count[which(circuitPack$Vendor == "Vendor2")],
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit2 <- summary(fit_2)
+
+##Get the unique "event" times in the pooled sample
+
+t.i <- sort(unique(c(summary_fit1$time, summary_fit2$time)))
+
+##Get the number of events and number at risk at the unique event times in the pooled sample
+
+d.i1 <- summary(fit_1, times = t.i)$n.event
+Y.i1 <- summary(fit_1, times = t.i)$n.risk
+
+d.i2 <- summary(fit_2, times = t.i)$n.event
+Y.i2 <- summary(fit_2, times = t.i)$n.risk
+
+master_table <- data.frame(t.i = t.i,
+                           Y.i1 = Y.i1,
+                           d.i1 = d.i1,
+                           Y.i2 = Y.i2,
+                           d.i2 = d.i2)
+
+master_table <- master_table %>%
+  dplyr::mutate(Y.i = Y.i1 + Y.i2,
+                d.i = d.i1 + d.i2)
+
+master_table <- master_table %>%
+  dplyr::mutate(expctd_events = ((Y.i1/Y.i)*(d.i)))
+
+master_table <- master_table %>%
+  dplyr::mutate(difference = (d.i1 - expctd_events)) %>%
+  dplyr::mutate(variance = (Y.i1/Y.i)*(1-(Y.i1/Y.i))*((Y.i-d.i)/(Y.i-1))*d.i)
+
+chi_squared.statistic <- ((sum(master_table$difference)**2))/(sum(master_table$variance))
+
+p_value <- 1 - pchisq(chi_squared.statistic,1)
+
+```
+
+I get a p-value of 0.29 (which is very different from the survdiff p-value!). 
+Thus, I do not have sufficient evidence to support the alternate hypothesis that the hazard rates are different.
+
+Lets check the p-value of the score test in a cox proportional hazards model. This should be the same as the logrank test p-value.
+
+```{r}
+cox_fit <- survival::coxph(survival::Surv(time = Days, event = Status) ~ Vendor, data = circuitPack, weights = Count, ties = 'efron')
+
+summary(cox_fit)
+
+```
+
+The p-value of the score test is 0.3, which closely matches the p-value that I got manually (0.29). Hence, my calculations are right.
+
+Now, I also want to use survdiff by expanding the dataset. That is, if count is greater than 1, then duplicate rows.
+
+```{r}
+count_gt1.index <- which(circuitPack$Count > 1)
+count_adj <- circuitPack$Count[count_gt1.index] -1
+
+circuitPack.split <- circuitPack[rep(row.names(circuitPack)[count_gt1.index],count_adj),]
+
+circuitPack.new <- rbind(circuitPack,circuitPack.split)
+
+sum(circuitPack$Count)
+
+
+survival::survdiff(
+  survival::Surv(time = Days, event = Status, type = 'right') ~ Vendor,
+  data = circuitPack.new,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+```
+
+Now, even survdiff gives me the expected p-value!
+
+I am more interested in the long term reliability of the components rather than their reliability at the beginning. So, I want to use the Fleming-Harrington weights (eq 7.39) with p=0 and q=1. First, I will need to fit a Kaplan Meir curve to the pooled sample.
+
+```{r}
+fit_pooled <- survival::survfit(
+  survival::Surv(time = Days, event = Status, type = 'right') ~ 1,
+  data = circuitPack,
+  weights = Count,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit_pooled <- summary(fit_pooled, digits = 2)
+
+pooled_df <- data.frame(t.i_pooled = summary_fit_pooled$time, t.i_surv_pooled = summary_fit_pooled$surv) %>% dplyr::mutate(surv_pooled_minus = head(c(1,t.i_surv_pooled),-1)) #Need survival at the previous event times, as per eq 7.3.9
+
+#Now, inner Join master_table and pooled_df
+
+master_table <- master_table %>% dplyr::inner_join(pooled_df, by = join_by(t.i == t.i_pooled))
+
+master_table <- master_table %>%
+  dplyr::mutate(difference_weighted = (d.i1 - expctd_events)*((1-surv_pooled_minus)**1)) #Using p=0 and q =1 Fleming Harrington weights
+
+chi_squared.statistic_FH <- ((sum(master_table$difference_weighted)**2))/(sum(master_table$variance))
+
+(p_value_FH <- 1 - pchisq(chi_squared.statistic_FH,1))
+
+```
+
+The p-value has increased further (0.99), which tells us that there is no difference in survival at the ends as well. 
+
+
+Lets try the log-rank test on the snubber dataset
+
+```{r Snubber start}
+snubber <- read_csv("Data/Snubber.csv")
+
+snubber <- snubber %>%
+  dplyr::mutate(Status = case_when(`Censoring Indicator` == "Failure" ~ 1, `Censoring Indicator` == "Censored" ~ 0)) %>% dplyr::rename(Cycles = `Toaster Cycles`)
+  
+  
+
+#str(snubber)
+
+#Build Kaplan Meir curve for the 2 Vendors
+
+fit <- survival::survfit(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber,
+  weights = Count,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary(fit, digits = 2)
+#plot(fit, ylim = c(0.97,1))
+
+ggsurvplot(fit, data = snubber, risk.table = T, conf.int = T)
+
+#Log rank test with weight = 1
+
+survival::survdiff(survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design, data = snubber,rho = 0) ##rho = 0 gives log rank test
+
+
+```
+
+The log rank test, which obviously does not take into account the frequency weights, is incorrect. Let us manually build table like table 7.2.
+
+```{r}
+
+
+t.i <- sort(unique(snubber$Cycles[which(snubber$Status == 1)]))
+
+##Fit the Kaplan Meir curve to the first group.
+
+fit_1 <- survival::survfit(
+  survival::Surv(
+    time = snubber$Cycles[which(snubber$Design == "Old")]
+    ,
+    event = snubber$Status[which(snubber$Design == "Old")]
+    ,
+    type = "right"
+  ) ~ 1 #Right hand formula for a single curve. It will use Turnbull iterative process for datasets containing left and right censored data.
+  ,
+  stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  ,
+  ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  ,
+  data = snubber,
+  weights = Count[which(snubber$Design == "Old")],
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit1 <- summary(fit_1)
+
+group1 <- data.frame(Time = summary_fit1$time,
+                     Events = summary_fit1$n.event,
+                     At_risk = summary_fit1$n.risk)
+
+##Fit the Kaplan Meir curve to the second group.
+
+fit_2 <- survival::survfit(
+  survival::Surv(
+    time = snubber$Cycles[which(snubber$Design == "New")]
+    ,
+    event = snubber$Status[which(snubber$Design == "New")]
+    ,
+    type = "right"
+  ) ~ 1 #Right hand formula for a single curve. It will use Turnbull iterative process for datasets containing left and right censored data.
+  ,
+  stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  ,
+  ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  ,
+  data = snubber,
+  weights = Count[which(snubber$Design == "New")],
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit2 <- summary(fit_2)
+
+##Get the unique "event" times in the pooled sample
+
+t.i <- sort(unique(c(summary_fit1$time, summary_fit2$time)))
+
+##Get the number of events and number at risk at the unique event times in the pooled sample
+
+d.i1 <- summary(fit_1, times = t.i, extend = T)$n.event
+Y.i1 <- summary(fit_1, times = t.i, extend = T)$n.risk
+
+d.i2 <- summary(fit_2, times = t.i)$n.event
+Y.i2 <- summary(fit_2, times = t.i)$n.risk
+
+master_table <- data.frame(t.i = t.i,
+                           Y.i1 = Y.i1,
+                           d.i1 = d.i1,
+                           Y.i2 = Y.i2,
+                           d.i2 = d.i2)
+
+master_table <- master_table %>%
+  dplyr::mutate(Y.i = Y.i1 + Y.i2,
+                d.i = d.i1 + d.i2) %>%
+  dplyr::filter(Y.i1 != 0 & Y.i2 != 0) #We need at least one observation at risk, as per the definition of "tau" in eq 7.3.1
+
+master_table <- master_table %>%
+  dplyr::mutate(expctd_events = ((Y.i1/Y.i)*(d.i)))
+
+master_table <- master_table %>%
+  dplyr::mutate(difference = (d.i1 - expctd_events)) %>%
+  dplyr::mutate(variance = (Y.i1/Y.i)*(1-(Y.i1/Y.i))*((Y.i-d.i)/(Y.i-1))*d.i)
+
+chi_squared.statistic <- ((sum(master_table$difference)**2))/(sum(master_table$variance))
+
+(p_value <- 1 - pchisq(chi_squared.statistic,1))
+
+```
+
+Lets check the p-value of the score test in a cox proportional hazards model. This should be the same as the logrank test p-value.
+
+```{r}
+cox_fit <- survival::coxph(survival::Surv(time = Cycles, event = Status) ~ Design, data = snubber, weights = Count, ties = 'efron')
+
+summary(cox_fit)
+```
+
+I am more interested in the long term reliability of the two designs rather than their reliability at the beginning. So, I want to use the Fleming-Harrington weights (eq 7.39) with p=0 and q=1. First, I will need to fit a Kaplan Meir curve to the pooled sample.
+
+```{r}
+fit_pooled <- survival::survfit(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ 1,
+  data = snubber,
+  weights = Count,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit_pooled <- summary(fit_pooled, digits = 2)
+
+pooled_df <- data.frame(t.i_pooled = summary_fit_pooled$time, t.i_surv_pooled = summary_fit_pooled$surv) %>% dplyr::mutate(surv_pooled_minus = head(c(1,t.i_surv_pooled),-1)) #Need survival at the previous event times, as per eq 7.3.9
+
+#Now, inner Join master_table and pooled_df
+
+master_table <- master_table %>% dplyr::inner_join(pooled_df, by = join_by(t.i == t.i_pooled))
+
+master_table <- master_table %>%
+  dplyr::mutate(difference_weighted = (d.i1 - expctd_events)*((1-surv_pooled_minus)**1)) #Using p=0 and q =1 Fleming Harrington weights
+
+chi_squared.statistic_FH <- ((sum(master_table$difference_weighted)**2))/(sum(master_table$variance))
+
+(p_value_FH <- 1 - pchisq(chi_squared.statistic_FH,1))
+
+```
+
+Even the Fleming Harrington weights of p=0 and q=1 leads to an insignificant test. 
+
+
+ROUGH
+
+```{r eval=FALSE, include=FALSE}
+
+data(reliability, package = "survival")
+
+survival::survdiff(survival::Surv(time = time, event = status, type = 'right') ~ temp, data = imotor,rho = 0) ##rho = 0 gives log rank test
+
+survival::survdiff(survival::Surv(time = time[which(temp != 150)], event = status[which(temp != 150)], type = 'right') ~ temp[which(temp != 150)], data = imotor,rho = 0) ##rho = 0 gives log rank test
+
+coxmd <- survival::coxph(survival::Surv(time = Days, event = Status) ~ Vendor, data = circuitPack, weights = Count, ties = 'efron')
+
+summary(coxmd)
+
+ten_survMisc <- survMisc::ten(fit)
+
+ggsurvplot(coxmd, data = circuitPack, pval = TRUE, pval.method = TRUE,
+           log.rank.weights = "1", 
+           pval.method.coord = c(5, 0.1),
+           pval.method.size = 4)
+
+
+circuitPack$`Vendor Number` <- factor(circuitPack$`Vendor Number`,levels = c("Vendor1","Vendor2"))
+
+levels(circuitPack$`Vendor Number`)
+
+
+ggsurvplot(fit_1, data = circuitPack, risk.table = TRUE)
+plot.survfit(fit_1)
+par("mar")
+par(mar=c(2,2,2,2))
+plot_obj <- plot(fit_1, cumhaz = F)
+survminer::ggsurvplot(fit_1,
+                      risk.table = FALSE,
+                      title = "Kaplan-Meir curve",
+                      xlab = "Days")
+
+```
+
+ROUGH
+
+## Hypothesis test for two or more samples
+
+The null and alternate hypothesis to test for difference in failure rates can be mentioned as follows:
+
+$$
+
+\begin{aligned}
+&Null \, Hypothesis \,  H_0: h_1(t) = h_2(t) = \ldots = h_k(t), \quad \text{for all } t \leq \tau, \quad \text{versus} \\
+&Alternative \, Hypothesis \, H_a: \text{at least one of the } h_i(t)'s \text{ is different for some } t \leq \tau. ]
+\end{aligned}
+
+$$
+
+
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```

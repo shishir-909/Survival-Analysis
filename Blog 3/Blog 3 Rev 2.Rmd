@@ -1,0 +1,590 @@
+---
+title: "Hypothesis Testing in Failure Time Data: Part I"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Application in R using non-parametric methods" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r Load Libraries, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+
+library(KMsurv)
+library(survival)
+library(survMisc) ##Confidence bands not in survival package. survMisc is an extension of the survival package and contains confidence bands
+library(tidyverse)
+library(readxl)
+library(readr)
+library(survminer)
+library(kableExtra)
+
+setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 3")
+```
+
+# Introduction
+
+I recently read the chapter on non parametric hypothesis testing of survival data from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger), which is mainly written from a biology and medical applications standpoint. This article is my attempt at applying the concepts I learnt in that chapter to time-to-failure data from reliability. 
+
+The methods discussed in this article deal with testing for difference in failure rates between groups against the null hypothesis of no difference between groups. The intent is to check whether there is a practical and statistical difference between the failure rates of the different groups. One would want to make such comparisons for various reasons. For example, suppose we have failure data of two components from different vendors and we want to find out which component has a lower failure rate. Another reason could be to check for any differences in failure rates before and after a process improvement change has been implemented, or between components operating on different mine sites or different conditions. These methods would be applicable to all such datasets that are right censored (or left truncated and right censored).
+
+Two datasets^[From the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] will be analysed. Each dataset consists of data from at least two groups. All datasets are available on the student companion website of this book. They are also publicly available on DataShare, Iowa State University's open data repository which can be accessed through [**this link**](https://doi.org/10.25380/iastate.c.5395665). 
+
+Note that I have only used non-parametric hypothesis testing methods in this article. Non-parametric methods do not make any assumptions for the distribution of failure times. These methods are normally tried first before moving on to parametric models, which, if the assumptions are met, could lead to more precise conclusions. 
+
+This blog article discusses the application of the non-parametric log rank test. Other non-parametric tests like test for trend, stratified tests etc will be discussed in subsequent blogs.
+
+The *survival* package in R has been used for a lot of the analysis in this article. Additionally, I have also used a few other packages like *survminer* which helps in plotting survival curves in a much more informative and visually appealing format. I noticed some issues which lead to incorrect results (p-value) in the *survminer* package, which I discuss in more detail below. It is best to verify your results, whenever possible, either by calculating some results manually or by cross verifying with other methods. For example, the p-value of a log rank test should be more or less the same as the p-value of the score test from a cox proportional hazards model. I have performed this check for one of the datasets below and was able to conclude that the p-value I was getting from the *survminer* package wasn't what I was expecting. 
+
+The R-markdown file for this article contains all the code used here and is available on this link.
+
+# Dataset I: Snubber
+
+This dataset, first given by Nelson (1981)^[Nelson, W. B. (1981). Analysis of performance degradation data from accelerated tests. *IEEE Transactions on Reliability 30*, 149–155.] contains information on accelerated life tests of two snubber designs for a pop-up toaster. The new design reduces the manufacturing cost, but does it affect the reliability of the component in comparison to the old design? A logrank test can be performed answer this question. We want to test whether the failure rates are different for the two designs. We set up the null and alternate hypothesis as follows. 
+
+$$
+\begin{aligned}
+&H_0: h_{old}(t) = h_{new}(t) \quad \text{for all } t \leq \tau, \quad \text{versus} 
+\\
+\\
+&H_A: h_{old}(t) \, \text{is different to} \, h_{new}(t) \, \text{for some} \,  t \leq \tau. \quad \text{(A)}
+\end{aligned}
+$$
+Here, $h(t)$ is the failure rate and $\tau$ is the largest time at which both groups have at least one observation at risk.
+
+The hypothesis test is conducted by calculating the weighted difference between the actual failures and expected failures under the null hypothesis of no difference in failure rates^[The details and methodology of testing for difference in hazard rates for two or more samples can be found in any good statistics textbooks on survival modeling or reliability data modeling. I recommend either of the two books I have mentioned previously]. This weighted difference, along with its variance-covariance matrix is used to calculate a chi-squared statistic  from which the p-value is calculated. The weights allow us to test for early or late departures between the hazard rates. For the log rank test, the value of the weight is 1, which means equal weightage over the whole range^[If one is more interested in long term reliability and does not want early failures to adversely affect this comparison, then Fleming Harrington weights with the appropriate values of *p* and *q* can be used.]. 
+
+In this article, we only use the log rank weight of 1.  
+
+Next, we load the snubber dataset, rename columns so that they don't include spaces and create a new column for status. 
+
+```{r Load snubber dataset, message=FALSE, warning=FALSE}
+snubber <- read_csv("Data/Snubber.csv")
+
+snubber <- snubber %>%
+  dplyr::mutate(Status = case_when(`Censoring Indicator` == "Failure" ~ 1, `Censoring Indicator` == "Censored" ~ 0)) %>% dplyr::rename(Cycles = `Toaster Cycles`)
+
+knitr::kable(snubber, caption = "Table 1. Snubber", align = rep('c', 5), table.envir = 'table*') %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+kableExtra::scroll_box(height = "200px")
+
+```
+
+The first column indicates the number of toaster cycles to failure or the number of toaster cycles when right censored. The third column is the frequency counts. The fourth column indicates whether the data point is from the new or old design.
+
+In the next step, a Kaplan-Meir survival curve is fit to the two groups.
+
+```{r snubber KM curve}
+fit_snubber <- survival::survfit(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber,
+  weights = Count,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+ggsurvplot(
+  fit_snubber,
+  data = snubber,
+  risk.table = T,
+  conf.int = T
+)
+```
+
+Looking at the curves in the plot, there doesn't seem to be much difference between the two groups. A hypothesis test for difference in hazard rates will formalize our comparison of the two groups. 
+
+The *survdiff* function from the *survival* package can be used to conduct the log-rank tests. The syntax is as follows:
+
+```{r survdiff snubber incorrect, echo=TRUE}
+survival::survdiff(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+```
+
+The p-value is 0.7, which means we do not have sufficient evidence at the 5% significance level to suggest that there is a difference in the hazard rates. But, there is a problem in the result of *survdiff* shown above! If you notice the syntax for *survdiff*, it does not have an argument for "Counts", which is the frequency of the number of events (or number of censored observations). *survdiff* treats every row as one count, whereas we want frequency of observations to be factored in just like it was done in the *survfit* function using the "weights = Count" argument. This can also be verified from the numbers under the "Observed" column in the results of *survdiff* shown above. The column shows that there are 13 failures in the old design as well as the new design whereas the number of failures in the old design is 18 and in the new design is 16, as shown below.
+
+```{r failure counts snubber}
+(sum(snubber$Count[which(snubber$Status ==1 & snubber$Design == "Old")]))
+
+(sum(snubber$Count[which(snubber$Status ==1 & snubber$Design == "New")]))
+```
+
+
+Hence, if we want to use *survdiff*, we need to modify our dataset in such a way that every row counts as only one observation. We do that in the next chunk of code.
+
+```{r snubber modify dataframe}
+count_gt1.index <- which(snubber$Count > 1) #identify rows with count greater than 1.
+count_adj <- snubber$Count[count_gt1.index] - 1
+
+snubber.split <- snubber[rep(row.names(snubber)[count_gt1.index],count_adj),]
+
+snubber.new <- rbind(snubber,snubber.split) %>% dplyr::select(!c("Count")) %>% dplyr::arrange(desc(Design))
+
+sum(snubber$Count) == dim(snubber.new)[1] #check whether sum of counts equals number of rows in the new dataset
+
+knitr::kable(snubber.new, caption = "Table 2. Snubber (Modified)", align = rep('c', 4), table.envir = 'table*') %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+kableExtra::scroll_box(height = "200px")
+
+
+```
+
+The modified table now has 106 rows, with one row for each observation. We can now apply the *survdiff* function from the *survival* package.
+
+```{r survdiff snubber correct}
+survival::survdiff(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber.new,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+```
+
+The "Observed" column above shows the right number of failures. The p-value is still 0.7, which again indicates that we do not have sufficient evidence at the 5% significance level to support the alternate hypothesis of difference in the failure rates of the new and old design.
+
+I also calculated the log rank test statistic and the p-value manually and was able to get a similar result^[R code for manual calculations can be found in the R markdown file for this article, available in my Github repository linked in the introduction].
+
+```{r snubber manual calculation, include=FALSE}
+
+#Manual calculation of log rank test for snubber dataset.
+
+##Fit the Kaplan Meir curve to the first group.
+
+fit_1 <- survival::survfit(
+  survival::Surv(
+    time = snubber$Cycles[which(snubber$Design == "Old")]
+    ,
+    event = snubber$Status[which(snubber$Design == "Old")]
+    ,
+    type = "right"
+  ) ~ 1 #Right hand formula for a single curve. It will use Turnbull iterative process for datasets containing left and right censored data.
+  ,
+  stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  ,
+  ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  ,
+  data = snubber,
+  weights = Count[which(snubber$Design == "Old")],
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit1 <- summary(fit_1)
+
+group1 <- data.frame(Time = summary_fit1$time,
+                     Events = summary_fit1$n.event,
+                     At_risk = summary_fit1$n.risk)
+
+##Fit the Kaplan Meir curve to the second group.
+
+fit_2 <- survival::survfit(
+  survival::Surv(
+    time = snubber$Cycles[which(snubber$Design == "New")]
+    ,
+    event = snubber$Status[which(snubber$Design == "New")]
+    ,
+    type = "right"
+  ) ~ 1 #Right hand formula for a single curve. It will use Turnbull iterative process for datasets containing left and right censored data.
+  ,
+  stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  ,
+  ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  ,
+  data = snubber,
+  weights = Count[which(snubber$Design == "New")],
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit2 <- summary(fit_2)
+
+##Get the unique "event" times in the pooled sample
+
+t.i <- sort(unique(c(summary_fit1$time, summary_fit2$time)))
+
+##Get the number of events and number at risk at the unique event times in the pooled sample
+
+d.i1 <- summary(fit_1, times = t.i, extend = T)$n.event
+Y.i1 <- summary(fit_1, times = t.i, extend = T)$n.risk
+
+d.i2 <- summary(fit_2, times = t.i)$n.event
+Y.i2 <- summary(fit_2, times = t.i)$n.risk
+
+master_table <- data.frame(t.i = t.i,
+                           Y.i1 = Y.i1,
+                           d.i1 = d.i1,
+                           Y.i2 = Y.i2,
+                           d.i2 = d.i2)
+
+master_table <- master_table %>%
+  dplyr::mutate(Y.i = Y.i1 + Y.i2,
+                d.i = d.i1 + d.i2) %>%
+  dplyr::filter(Y.i1 != 0 & Y.i2 != 0) #We need at least one observation at risk, as per the definition of "tau" in eq 7.3.1
+
+master_table <- master_table %>%
+  dplyr::mutate(expctd_events = ((Y.i1/Y.i)*(d.i)))
+
+master_table <- master_table %>%
+  dplyr::mutate(difference = (d.i1 - expctd_events)) %>%
+  dplyr::mutate(variance = (Y.i1/Y.i)*(1-(Y.i1/Y.i))*((Y.i-d.i)/(Y.i-1))*d.i)
+
+chi_squared.statistic <- ((sum(master_table$difference)**2))/(sum(master_table$variance))
+
+(p_value <- 1 - pchisq(chi_squared.statistic,1))
+
+```
+
+
+We now plot the Kaplan Meir curves along with the p-value on the plot.
+
+```{r snubber KM curve pval}
+survminer::ggsurvplot(
+  fit_snubber,
+  pval = 0.7,
+  risk.table = T,
+  conf.int = T
+)
+```
+
+There is another note of caution that is warranted here. The *ggsurvplot* function from the *survminer* package which we have used to generate the plot above, also has the ability to conduct tests of 2 or more groups with different weights. The calculated p-value is  plotted on the survival curve through additional arguments as shown below.
+
+```{r snubber KM curve pval incorrect}
+survminer::ggsurvplot(
+  fit_snubber,
+  pval = T, #default is weight = 1 for log rank test
+  pval.method = T,
+  risk.table = T,
+  conf.int = T
+)
+```
+
+Since the Kaplan-Meir curve model "fit_snubber" is an input to *ggsurvplot*, one could easily mistake the p-value reported on the plot to be the correct one that takes into account the frequency counts from the "fit_snubber" model object. Unfortunately, this is not the case. *ggsurvplot* calls the *survdiff* function by default on the unmodified dataframe in the "fit_snubber" model object, which leads to the incorrect p-value. Hence, if you are planning to use ggsurvplot to plot Kaplan Meir curves, it is recommended that you hardcode the p-value like we did initially after the correct calculations through *survdiff*, instead of relying on *ggsurvplot* calculations.
+
+Next, we will look at an example where there is a big change in the p-value before and after we modify the dataframe to make it suitable for applying the *survdiff* function.
+
+# Dataset II: Circuit Packs
+
+This dataset contains life test data from a test conducted to compare failure time distribution of components from two different vendors. It was first reported by Hooper and Amster (1998)^[Hooper, J. H. and S. J. Amster (1998). Analysis and presentation of reliability data. In
+H. M. Wadsworth (Ed.), *Handbook of Statistical Methods for Engineers and Scientists* (Second ed.). McGraw-Hill.] 
+
+Just like the previous example, we load the dataset and clean up column names.
+
+```{r Load circuitPack dataset}
+circuitPack <- read_csv("Data/CircuitPack05.csv")
+
+circuitPack <- circuitPack %>%
+  dplyr::mutate(Status = case_when(`Censoring Indicator` == "Failure" ~ 1, `Censoring Indicator` == "Censored" ~ 0)) %>% 
+  dplyr::rename(Vendor = `Vendor Number`)
+
+knitr::kable(circuitPack, caption = "Table 3. Circuit Pack", align = rep('c', 5), table.envir = 'table*') %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+kableExtra::scroll_box(height = "200px")
+```
+
+Notice that the number of censored components in the "Count" column at 365 days are much higher than the number of failures.
+
+Here is the Kaplan Meir curve for this scenario.
+
+```{r circuitPack KM curve}
+fit <- survival::survfit(
+  survival::Surv(time = Days, event = Status, type = 'right') ~ Vendor,
+  data = circuitPack,
+  weights = Count,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+ggsurvplot(fit, data = circuitPack, risk.table = T, ylim = c(0.95,1),  conf.int = T)
+```
+
+Again, the survival probability plot doesn't suggest much difference between the two curves.
+
+The log rank test using *survdiff* directly on the dataset is shown below.
+
+```{r survdiff circuitPack incorrect}
+survival::survdiff(
+  survival::Surv(time = Days, event = Status, type = 'right') ~ Vendor,
+  data = circuitPack,
+  rho = 0
+) ##rho = 0 gives log rank test
+```
+
+The column "N" in the output of *survdiff* shows 22 for Vendor 1 and 19 for Vendor 2. But the total number of observations are much higher than these values, as shown in the next chunk of code. Also, notice that the p-value is 0.8.
+
+```{r total counts circuitPack}
+(sum(circuitPack$Count[which(circuitPack$Vendor == "Vendor1")]))
+
+(sum(circuitPack$Count[which(circuitPack$Vendor == "Vendor2")]))
+```
+
+There are 1041 observations from Vendor 1 and 1245 observations from Vendor. This discrepancy will lead to a big change in the p-value once we modify the data frame like we did in the first example.
+
+```{r circuitPack modify dataframe}
+count_gt1.index <- which(circuitPack$Count > 1) #identify rows with count greater than 1.
+count_adj <- circuitPack$Count[count_gt1.index] - 1
+
+circuitPack.split <- circuitPack[rep(row.names(circuitPack)[count_gt1.index],count_adj),]
+
+circuitPack.new <- rbind(circuitPack,circuitPack.split) %>% dplyr::select(!c("Count")) %>% dplyr::arrange((Vendor))
+
+sum(circuitPack$Count) == dim(circuitPack.new)[1] #check whether sum of counts equals number of rows in the new dataset
+
+knitr::kable(circuitPack.new, caption = "Table 4. Circuit Pack (Modified)", align = rep('c', 4), table.envir = 'table*') %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+kableExtra::scroll_box(height = "200px")
+```
+
+The modified dataframe above has 2286 rows, with one row for each observation.
+
+Next, we use the modified data frame to conduct the long rank test using *survdiff*.
+
+```{r survdiff circuitPack correct}
+survival::survdiff(
+  survival::Surv(time = Days, event = Status, type = 'right') ~ Vendor,
+  data = circuitPack.new,
+  rho = 0
+) ##rho = 0 gives log rank test
+```
+
+We now have the correct number of observations in the column "N". Notice that the p-value is now 0.3. Again, we do not have sufficient evidence of difference in the hazard rates at the 5% alpha level. But this p-value is the correct p-value as opposed to the incorrect p-value of 0.7 that we found previously.
+
+One way to verify whether this p-value is indeed correct is to conduct a score test from a Cox proportional hazards model refression. The score test is exactly the same as a log rank test.
+
+```{r circuitPack cox}
+cox_fit <- survival::coxph(
+  survival::Surv(time = Days, event = Status) ~ Vendor,
+  data = circuitPack,
+  weights = Count,
+  ties = 'efron'
+)
+
+summary(cox_fit)
+```
+
+The summary shows that the p-value for the score test is 0.3, which, as expected, matches the log rank test p-value.
+
+What does the log rank test within ggsurvplot indicate? Lets find out.
+
+```{r circuitPack ggsurvplot incorrect pval}
+
+ggsurvplot(
+  fit,
+  data = circuitPack,
+  risk.table = T,
+  ylim = c(0.95, 1),
+  conf.int = T,
+  pval = T,
+  pval.method = T,
+  pval.coord = c(50, 0.97),
+  pval.method.coord = c(50, 0.96)
+)
+```
+
+It gives us an incorrect p-value of 0.7. Hence, we should not use this functionality from *ggsurvplot*. Here is the correct plot with the p-value hardcoded.
+
+```{r circuitPack KM curve pval correct}
+ggsurvplot(
+  fit,
+  data = circuitPack,
+  risk.table = T,
+  ylim = c(0.95, 1),
+  conf.int = T,
+  pval = 0.3,
+  pval.coord = c(50, 0.97),
+  pval.method.coord = c(50, 0.96)
+)
+```
+
+These results also match with my manual calculations^[Can be found in my github repository].
+
+```{r circuitPack manual calculation, include=FALSE}
+
+#Manual calculation of log rank test for circuitPack dataset.
+
+##Fit the Kaplan Meir curve to the first group.
+
+fit_1 <- survival::survfit(
+  survival::Surv(
+    time = circuitPack$Days[which(circuitPack$Vendor == "Vendor1")]
+    ,
+    event = circuitPack$Status[which(circuitPack$Vendor == "Vendor1")]
+    ,
+    type = "right"
+  ) ~ 1 #Right hand formula for a single curve. It will use Turnbull iterative process for datasets containing left and right censored data.
+  ,
+  stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  ,
+  ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  ,
+  data = circuitPack,
+  weights = Count[which(circuitPack$Vendor == "Vendor1")],
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit1 <- summary(fit_1)
+
+group1 <- data.frame(Time = summary_fit1$time,
+                     Events = summary_fit1$n.event,
+                     At_risk = summary_fit1$n.risk)
+
+##Fit the Kaplan Meir curve to the second group.
+
+fit_2 <- survival::survfit(
+  survival::Surv(
+    time = circuitPack$Days[which(circuitPack$Vendor == "Vendor2")]
+    ,
+    event = circuitPack$Status[which(circuitPack$Vendor == "Vendor2")]
+    ,
+    type = "right"
+  ) ~ 1 #Right hand formula for a single curve. It will use Turnbull iterative process for datasets containing left and right censored data.
+  ,
+  stype = 1 #Survival type 1 means direct estimate of survival curve. Type 2 would have been exp(-H(t))
+  ,
+  ctype = 1 #Cumulative Hazard type 1 is Nelson-Aalen. Type 2 is Fleming-Harrington correction for tied events.
+  ,
+  data = circuitPack,
+  weights = Count[which(circuitPack$Vendor == "Vendor2")],
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+summary_fit2 <- summary(fit_2)
+
+##Get the unique "event" times in the pooled sample
+
+t.i <- sort(unique(c(summary_fit1$time, summary_fit2$time)))
+
+##Get the number of events and number at risk at the unique event times in the pooled sample
+
+d.i1 <- summary(fit_1, times = t.i)$n.event
+Y.i1 <- summary(fit_1, times = t.i)$n.risk
+
+d.i2 <- summary(fit_2, times = t.i)$n.event
+Y.i2 <- summary(fit_2, times = t.i)$n.risk
+
+master_table <- data.frame(t.i = t.i,
+                           Y.i1 = Y.i1,
+                           d.i1 = d.i1,
+                           Y.i2 = Y.i2,
+                           d.i2 = d.i2)
+
+master_table <- master_table %>%
+  dplyr::mutate(Y.i = Y.i1 + Y.i2,
+                d.i = d.i1 + d.i2)
+
+master_table <- master_table %>%
+  dplyr::mutate(expctd_events = ((Y.i1/Y.i)*(d.i)))
+
+master_table <- master_table %>%
+  dplyr::mutate(difference = (d.i1 - expctd_events)) %>%
+  dplyr::mutate(variance = (Y.i1/Y.i)*(1-(Y.i1/Y.i))*((Y.i-d.i)/(Y.i-1))*d.i)
+
+chi_squared.statistic <- ((sum(master_table$difference)**2))/(sum(master_table$variance))
+
+(p_value <- 1 - pchisq(chi_squared.statistic,1))
+
+```
+
+
+# Conclusion
+
+In both the cases, we did not find sufficient evidence of a difference in the hazard rates of the two groups at the 5% significance level^[The log rank test as well as other non parametric tests with different weights are based on large sample theory, and results from small samples must be interpreted with caution.].  
+
+It is also important to verify our results to make sure that the answer we get is indeed correct. Open source software like R has made data analysis universally accessible, but one must also be careful and avoid blindly applying packages without verifying results. Mature packages like *survival*, which is regularly maintained and has been evolving for close to 4 decades is an excellent tool for survival analysis. But when it comes to newer packages which are still evolving, or packages that are not regularly maintained, it is best to verify before using it in any production environment. 
+
+# Acknowledgements
+
+1. Most of what I have learnt about time-to-event analysis is from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger).
+
+2. The dataset I have used above is used in one of the examples in the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual).
+
+3. This article's format is a style that Edward Tufte uses in his books and handouts. I have used the *tufte* library in R and am grateful to the authors of this package. I should also mention that I found out about this style when I stumbled across an article on Survival Analysis by Mark Bounthavong, which was also written using the *tufte* package.
+
+# End
+
+I hope you enjoyed reading this blog post! If you have any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at shishir909@gmail.com.
+
+
+```{r ROUGH DO NOT RUN, eval=FALSE, include=FALSE}
+## binary vector
+ten(c(1, 0, 1, 0, 1))
+ten_obj_snubber <- ten(fit_snubber)
+comp(ten_obj_snubber)
+
+## Surv object
+df0 <- data.frame(t=c(1, 1, 2, 3, 5, 8, 13, 21),
+e=rep(c(0, 1), 4))
+s1 <- with(df0, Surv(t, e, type="right"))
+ten(s1)
+
+survival::survdiff(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber.new,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+#Log rank test with weight = 1
+
+survival::survdiff(survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design, data = snubber,rho = 0) ##rho = 0 gives log rank test
+
+ggsurvplot(fit, data = circuitPack, risk.table = T, ylim = c(0.95,1),  conf.int = T, pval = T, pval.method = T, pval.coord = c(50,0.97), pval.method.coord = c(50,0.96))
+
+survival::survdiff(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+
+
+
+count_gt1.index <- which(snubber$Count > 1)
+count_adj <- snubber$Count[count_gt1.index] -1
+
+snubber.split <- snubber[rep(row.names(snubber)[count_gt1.index],count_adj),]
+
+snubber.new <- rbind(snubber,snubber.split)
+
+sum(snubber$Count)
+
+
+survival::survdiff(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber.new,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+# knitr::kable(snubber, caption = "Table 1. Snubber", align = rep('c', 5), table.envir = 'table*') %>%
+# kableExtra::scroll_box(height = "200px")
+
+#kableExtra::scroll_box(width = "750px", height = "200px")
+```
+
+
+
+
+
+
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
+
+ROUGH

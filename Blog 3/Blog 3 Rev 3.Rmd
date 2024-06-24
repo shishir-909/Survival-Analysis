@@ -1,0 +1,57 @@
+---
+title: "Hypothesis Testing in Failure Time Data"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Application in R using non-parametric methods" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion("tufte"), include = FALSE)
+options(htmltools.dir.version = FALSE)
+
+
+library(KMsurv)
+library(survival)
+library(survMisc) ##Confidence bands not in survival package. survMisc is an extension of the survival package and contains confidence bands
+library(tidyverse)
+library(readxl)
+library(readr)
+library(survminer)
+
+#setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis")
+```
+
+# Introduction
+
+I recently read a chapter on non parametric hypothesis testing of survival data from a statistics textbook^[Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger)], which is mainly written from a biology and medical applications standpoint. The following article is my attempt at applying the concepts I learnt in that chapter to failure time datasets from reliability. 
+
+The methods discussed in this article deal with testing for difference in survival (or failure rates) between groups against the null hypothesis of no difference between groups. The intent is to check whether there is a practical and statistical difference between the failure rates of the different groups. One would want to make such comparisons for various reasons. For example, suppose we have failure data of two components from different vendors and we want to find out which component has a lower failure rate. Another reason could be to check for any differences in failure rates before and after a process improvement has been made, or between components operating in different mine sites or different conditions. These methods would be applicable to all such datasets that are right censored (or left truncated and right censored).
+
+Three datasets^[From the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] will be analysed. Each dataset consists of data from at least two groups. 
+
+Note that in this article, I have only used non-parametric hypothesis testing methods. Non-parametric methods do not make any assumptions for the distribution of failure times or censoring times. Usually, these methods are tried first before moving on to parametric models, which, if the assumptions are met, could lead to more precise conclusions. 
+
+I have used the R package *survival* for a lot of the analysis wherever possible. On some occasions, I have manually calculated values and estimated the p-value when the *survival* package didn't have the functionality I needed. Additionally, I have also used a few other packages like *survminer* which helps in plotting survival curves in a much more informative and visually appealing format. On the other hand, I noticed some issues which lead to incorrect results (p-value) in the *survminer* package, which I discuss in more detail below. It is best to verify your results, whenever possible, either by calculating some results manually or by cross verifying with other methods. For example, the p-value of a log rank test should be more or less the same as the p-value of the score test from a cox proportional hazards model. I have performed this check for one of the datasets below and was able to conclude that the p-value I was getting from the *survminer* package wasn't what I was expecting.  
+
+# Dataset I: Snubber
+
+I want to `r margin_note(This is just a test)` test something out.
+
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
