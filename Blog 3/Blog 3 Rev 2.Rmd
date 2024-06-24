@@ -36,19 +36,17 @@ setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/In
 
 # Introduction
 
-I recently read the chapter on non parametric hypothesis testing of survival data from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger), which is mainly written from a biology and medical applications standpoint. This article is my attempt at applying the concepts I learnt in that chapter to time-to-failure data from reliability. 
+The following article is my attempt at applying the concepts I learnt in the chapter on non-parametric hypothesis testing^[From the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger)] to failure time data sets in reliability. 
 
-The methods discussed in this article deal with testing for difference in failure rates between groups against the null hypothesis of no difference between groups. The intent is to check whether there is a practical and statistical difference between the failure rates of the different groups. One would want to make such comparisons for various reasons. For example, suppose we have failure data of two components from different vendors and we want to find out which component has a lower failure rate. Another reason could be to check for any differences in failure rates before and after a process improvement change has been implemented, or between components operating on different mine sites or different conditions. These methods would be applicable to all such datasets that are right censored (or left truncated and right censored).
+The log rank test discussed in this article deals with testing for difference in failure rates between different groups. The intent is to check whether there is a practical and statistical difference between the failure rates of the different groups. One would want to make such comparisons for various reasons. For example, suppose we have failure data of two components from different vendors and we want to find out which component has a lower failure rate. Another reason could be to check for any differences in failure rates before and after a process improvement change has been implemented, or between components operating on different mine sites or different conditions. These methods would be applicable to all such datasets that are right censored (or left truncated and right censored).
 
 Two datasets^[From the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] will be analysed. Each dataset consists of data from at least two groups. All datasets are available on the student companion website of this book. They are also publicly available on DataShare, Iowa State University's open data repository which can be accessed through [**this link**](https://doi.org/10.25380/iastate.c.5395665). 
 
-Note that I have only used non-parametric hypothesis testing methods in this article. Non-parametric methods do not make any assumptions for the distribution of failure times. These methods are normally tried first before moving on to parametric models, which, if the assumptions are met, could lead to more precise conclusions. 
-
-This blog article discusses the application of the non-parametric log rank test. Other non-parametric tests like test for trend, stratified tests etc will be discussed in subsequent blogs.
+Non-parametric methods do not make any assumptions for the distribution of failure times. These methods are normally tried first before moving on to parametric models, which, if the assumptions are met, could lead to more precise conclusions. This blog article discusses the application of the log rank test. Other non-parametric tests like test for trend, stratified tests etc will be discussed in subsequent blogs.
 
 The *survival* package in R has been used for a lot of the analysis in this article. Additionally, I have also used a few other packages like *survminer* which helps in plotting survival curves in a much more informative and visually appealing format. I noticed some issues which lead to incorrect results (p-value) in the *survminer* package, which I discuss in more detail below. It is best to verify your results, whenever possible, either by calculating some results manually or by cross verifying with other methods. For example, the p-value of a log rank test should be more or less the same as the p-value of the score test from a cox proportional hazards model. I have performed this check for one of the datasets below and was able to conclude that the p-value I was getting from the *survminer* package wasn't what I was expecting. 
 
-The R-markdown file for this article contains all the code used here and is available on this link.
+The R-markdown file for this article contains all the code used here and is available on this [**link**](https://github.com/shishir-909/Survival-Analysis/blob/7a740c628d499c00e6d776d624054b56365c79cb/Blog%203/Blog%203%20Rev%202.Rmd).
 
 # Dataset I: Snubber
 
@@ -157,7 +155,7 @@ survival::survdiff(
 
 The "Observed" column above shows the right number of failures. The p-value is still 0.7, which again indicates that we do not have sufficient evidence at the 5% significance level to support the alternate hypothesis of difference in the failure rates of the new and old design.
 
-I also calculated the log rank test statistic and the p-value manually and was able to get a similar result^[R code for manual calculations can be found in the R markdown file for this article, available in my Github repository linked in the introduction].
+I also calculated the log rank test statistic and the p-value manually and was able to get a similar result^[R code for manual calculations can be found in the R markdown file for this article, available [**here**](https://github.com/shishir-909/Survival-Analysis/blob/7a740c628d499c00e6d776d624054b56365c79cb/Blog%203/Blog%203%20Rev%202.Rmd)].
 
 ```{r snubber manual calculation, include=FALSE}
 
@@ -298,6 +296,17 @@ kableExtra::scroll_box(height = "200px")
 
 Notice that the number of censored components in the "Count" column at 365 days are much higher than the number of failures.
 
+We set up the null and alternate hypothesis as follows. 
+
+$$
+\begin{aligned}
+&H_0: h_{Vendor 1}(t) = h_{Vendor 2}(t) \quad \text{for all } t \leq \tau, \quad \text{versus} 
+\\
+\\
+&H_A: h_{Vendor 1}(t) \, \text{is different to} \, h_{Vendor 2}(t) \, \text{for some} \,  t \leq \tau. \quad \text{(A)}
+\end{aligned}
+$$
+
 Here is the Kaplan Meir curve for this scenario.
 
 ```{r circuitPack KM curve}
@@ -410,7 +419,7 @@ ggsurvplot(
 )
 ```
 
-These results also match with my manual calculations^[Can be found in my github repository].
+These results match my manual calculations^[Code for manual calculations can be found in the R markdown file for this article linked [here](https://github.com/shishir-909/Survival-Analysis/blob/7a740c628d499c00e6d776d624054b56365c79cb/Blog%203/Blog%203%20Rev%202.Rmd)].
 
 ```{r circuitPack manual calculation, include=FALSE}
 
@@ -506,7 +515,7 @@ chi_squared.statistic <- ((sum(master_table$difference)**2))/(sum(master_table$v
 
 In both the cases, we did not find sufficient evidence of a difference in the hazard rates of the two groups at the 5% significance level^[The log rank test as well as other non parametric tests with different weights are based on large sample theory, and results from small samples must be interpreted with caution.].  
 
-It is also important to verify our results to make sure that the answer we get is indeed correct. Open source software like R has made data analysis universally accessible, but one must also be careful and avoid blindly applying packages without verifying results. Mature packages like *survival*, which is regularly maintained and has been evolving for close to 4 decades is an excellent tool for survival analysis. But when it comes to newer packages which are still evolving, or packages that are not regularly maintained, it is best to verify before using it in any production environment. 
+My biggest takeaway from this exercise is to verify results to verify the results that I get from packages whenever possible. Open source software like R has democratized data analysis using tools that were previously only available via expensive paid software, but this also comes with its share of risks.  It is best to be careful and avoid blindly applying packages without verifying results. Mature packages like *survival*, which is regularly maintained and has been evolving for close to 4 decades is an excellent tool for survival analysis. But when it comes to newer packages that are still evolving, or packages that are not regularly maintained, it is best to manually calculate some results when feasible and see if the package produces values that you expect. 
 
 # Acknowledgements
 
@@ -587,4 +596,4 @@ survival::survdiff(
 knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
 ```
 
-ROUGH
+
