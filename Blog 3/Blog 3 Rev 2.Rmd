@@ -1,5 +1,5 @@
 ---
-title: "Hypothesis Testing in Failure Time Data: Part I"
+title: "Hypothesis Testing of Failure Time Data: Part I"
 runningheader: "Tufte Handout with R Markdown" # only for pdf output
 subtitle: "Application in R using non-parametric methods" # only for html output
 author: "Shishir Rao"
@@ -40,7 +40,7 @@ The following article is my attempt at applying the concepts I learnt in the cha
 
 The log rank test discussed in this article deals with testing for difference in failure rates between different groups. The intent is to check whether there is a practical and statistical difference between the failure rates of the different groups. One would want to make such comparisons for various reasons. For example, suppose we have failure data of two components from different vendors and we want to find out which component has a lower failure rate. Another reason could be to check for any differences in failure rates before and after a process improvement change has been implemented, or between components operating on different mine sites or different conditions. These methods would be applicable to all such datasets that are right censored (or left truncated and right censored).
 
-Two datasets^[From the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] will be analysed. Each dataset consists of data from at least two groups. All datasets are available on the student companion website of this book. They are also publicly available on DataShare, Iowa State University's open data repository which can be accessed through [**this link**](https://doi.org/10.25380/iastate.c.5395665). 
+Two datasets^[From the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] will be analysed. Each dataset consists of data from at least two groups. All datasets are available on the student companion website of the aforementioned book. They are also publicly available on DataShare, Iowa State University's open data repository which can be accessed through [**this link**](https://doi.org/10.25380/iastate.c.5395665). 
 
 Non-parametric methods do not make any assumptions for the distribution of failure times. These methods are normally tried first before moving on to parametric models, which, if the assumptions are met, could lead to more precise conclusions. This blog article discusses the application of the log rank test. Other non-parametric tests like test for trend, stratified tests etc will be discussed in subsequent blogs.
 
@@ -57,7 +57,7 @@ $$
 &H_0: h_{old}(t) = h_{new}(t) \quad \text{for all } t \leq \tau, \quad \text{versus} 
 \\
 \\
-&H_A: h_{old}(t) \, \text{is different to} \, h_{new}(t) \, \text{for some} \,  t \leq \tau. \quad \text{(A)}
+&H_A: h_{old}(t) \, \text{is different to} \, h_{new}(t) \, \text{for some} \,  t \leq \tau. \quad
 \end{aligned}
 $$
 Here, $h(t)$ is the failure rate and $\tau$ is the largest time at which both groups have at least one observation at risk.
@@ -303,8 +303,7 @@ $$
 &H_0: h_{Vendor 1}(t) = h_{Vendor 2}(t) \quad \text{for all } t \leq \tau, \quad \text{versus} 
 \\
 \\
-&H_A: h_{Vendor 1}(t) \, \text{is different to} \, h_{Vendor 2}(t) \, \text{for some} \,  t \leq \tau. \quad \text{(A)}
-\end{aligned}
+&H_A: h_{Vendor 1}(t) \, \text{is different to} \, h_{Vendor 2}(t) \, \text{for some} \,  t \leq \tau. \end{aligned}
 $$
 
 Here is the Kaplan Meir curve for this scenario.
@@ -515,7 +514,7 @@ chi_squared.statistic <- ((sum(master_table$difference)**2))/(sum(master_table$v
 
 In both the cases, we did not find sufficient evidence of a difference in the hazard rates of the two groups at the 5% significance level^[The log rank test as well as other non parametric tests with different weights are based on large sample theory, and results from small samples must be interpreted with caution.].  
 
-My biggest takeaway from this exercise is to verify results to verify the results that I get from packages whenever possible. Open source software like R has democratized data analysis using tools that were previously only available via expensive paid software, but this also comes with its share of risks.  It is best to be careful and avoid blindly applying packages without verifying results. Mature packages like *survival*, which is regularly maintained and has been evolving for close to 4 decades is an excellent tool for survival analysis. But when it comes to newer packages that are still evolving, or packages that are not regularly maintained, it is best to manually calculate some results when feasible and see if the package produces values that you expect. 
+My biggest takeaway from this exercise is to verify results that I get from packages whenever possible. Open source software like R has democratized data analysis using tools that were previously only available via expensive paid software, but this also comes with its share of risks.  It is best to be careful and avoid blindly applying packages without verifying results. A mature package like *survival*, which is regularly maintained and has been evolving for close to 4 decades is an excellent tool for survival analysis. But when it comes to newer packages that are still evolving, or packages that are not regularly maintained, it is best to manually calculate some results whenever feasible and see if the package produces values that you expect. 
 
 # Acknowledgements
 
