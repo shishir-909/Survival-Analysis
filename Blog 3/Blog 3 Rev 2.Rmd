@@ -395,7 +395,7 @@ ggsurvplot(
 )
 ```
 
-It gives us an incorrect p-value of 0.7. Hence, we should not use this functionality from *ggsurvplot*. Here is the correct plot with the p-value hardcoded.
+It gives us an incorrect p-value of 0.79^[But it still shows the right "number at risk" in the table below the plot.]. Hence, I do not recommend using this functionality from *ggsurvplot*. Here is the correct plot with the p-value hardcoded.
 
 ```{r circuitPack KM curve pval correct}
 ggsurvplot(

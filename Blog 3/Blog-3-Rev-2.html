@@ -2865,12 +2865,12 @@ H. M. Wadsworth (Ed.), <em>Handbook of Statistical Methods for Engineers and Sci
   dplyr::mutate(Status = case_when(`Censoring Indicator` == &quot;Failure&quot; ~ 1, `Censoring Indicator` == &quot;Censored&quot; ~ 0)) %&gt;% 
   dplyr::rename(Vendor = `Vendor Number`)
 
-knitr::kable(circuitPack, caption = &quot;Table 2. Circuit Pack&quot;, align = rep(&#39;c&#39;, 5), table.envir = &#39;table*&#39;) %&gt;%
+knitr::kable(circuitPack, caption = &quot;Table 3. Circuit Pack&quot;, align = rep(&#39;c&#39;, 5), table.envir = &#39;table*&#39;) %&gt;%
  kableExtra::kable_styling(&quot;striped&quot;, full_width = T, position = &quot;left&quot;) %&gt;%
 kableExtra::scroll_box(height = &quot;200px&quot;)</code></pre>
 <div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:200px; ">
 <p><!--
-<caption>--><span class="marginnote shownote">Table 2. Circuit Pack</span><!--</caption>--></p>
+<caption>--><span class="marginnote shownote">Table 3. Circuit Pack</span><!--</caption>--></p>
 <table class="table table-striped" style>
 
 
@@ -3637,12 +3637,12 @@ circuitPack.new &lt;- rbind(circuitPack,circuitPack.split) %&gt;% dplyr::select(
 
 sum(circuitPack$Count) == dim(circuitPack.new)[1] #check whether sum of counts equals number of rows in the new dataset</code></pre>
 <pre><code>## [1] TRUE</code></pre>
-<pre class="r"><code>knitr::kable(circuitPack.new, caption = &quot;Table 3. Circuit Pack (Modified)&quot;, align = rep(&#39;c&#39;, 4), table.envir = &#39;table*&#39;) %&gt;%
+<pre class="r"><code>knitr::kable(circuitPack.new, caption = &quot;Table 4. Circuit Pack (Modified)&quot;, align = rep(&#39;c&#39;, 4), table.envir = &#39;table*&#39;) %&gt;%
  kableExtra::kable_styling(&quot;striped&quot;, full_width = T, position = &quot;left&quot;) %&gt;%
 kableExtra::scroll_box(height = &quot;200px&quot;)</code></pre>
 <div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:200px; ">
 <p><!--
-<caption>--><span class="marginnote shownote">Table 3. Circuit Pack (Modified)</span><!--</caption>--></p>
+<caption>--><span class="marginnote shownote">Table 4. Circuit Pack (Modified)</span><!--</caption>--></p>
 <table class="table table-striped" style>
 
 
@@ -35742,7 +35742,7 @@ summary(cox_fit)</code></pre>
 </div>
 <div id="conclusion" class="section level1">
 <h1>Conclusion</h1>
-<p>In both the cases above, we did not find sufficient evidence of a difference in the hazard rates of the two groups at the 5% alpha level. The log rank test as well as other non parametric tests with different weights are based on large sample theory, and results from small samples must be interpreted with caution.</p>
+<p>In both the cases, we did not find sufficient evidence of a difference in the hazard rates of the two groups at the 5% significance level<label for="tufte-sn-8" class="margin-toggle sidenote-number">8</label><input type="checkbox" id="tufte-sn-8" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">8</span> The log rank test as well as other non parametric tests with different weights are based on large sample theory, and results from small samples must be interpreted with caution.</span>.</p>
 <p>It is also important to verify our results to make sure that the answer we get is indeed correct. Open source software like R has made data analysis universally accessible, but one must also be careful and avoid blindly applying packages without verifying results. Mature packages like <em>survival</em>, which is regularly maintained and has been evolving for close to 4 decades is an excellent tool for survival analysis. But when it comes to newer packages which are still evolving, or packages that are not regularly maintained, it is best to verify before using it in any production environment.</p>
 </div>
 <div id="acknowledgements" class="section level1">
