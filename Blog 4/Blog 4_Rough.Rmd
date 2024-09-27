@@ -1,0 +1,443 @@
+---
+title: "Hypothesis Testing of Failure Time Data: Part II"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Application of a non-parametric stratified test and a test for trend using R" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r Load Libraries, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+
+library(KMsurv)
+library(survival)
+library(survMisc) ##Confidence bands not in survival package. survMisc is an extension of the survival package and contains confidence bands
+library(tidyverse)
+library(readxl)
+library(readr)
+library(survminer)
+library(kableExtra)
+
+setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 4")
+```
+
+# Introduction
+
+This article is a continuation of the series where I apply the concepts learnt from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger) to datasets from reliability. The book focuses on applications in biology and medicine, but the methods described are equally applicable to other fields like reliability and quality assurance.
+
+The last article^[Hypothesis Testing of Failure Time Data: Part I can be accessed [**here**](https://rpubs.com/shishir909/1199328)]shows an application of a non-parametric log rank test where the aim was to test whether failure rates are different among two or more groups. This article is a continuation of the non-parametric testing methods by extending its application to a test that has power to detect a trend in the failure rate. The second application demonstrated in this article extends the log rank test by including an adjustment for confounding variables that could possibly affect the failure rates. This is done using a stratified test. 
+
+# Test for trend
+
+## Part A
+
+To illustrate a test for trend, we will use the *PartA* dataset, which contains data from an experiment conducted to compare three life test operators. The operators perform life testing on a machine tool part. The manufacturer suspected that the manual nature of the life test contributed to variability in the results of the life tests. This dataset is from another excellent book^[Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] on the topic of statistical analysis of reliability data and is available on the book's student companion website. It can also be accessed from DataShare, Iowa State University's open data repository through [**this link**](https://doi.org/10.25380/iastate.c.5395665). 
+
+Load the dataset
+
+```{r}
+PartA <- read_csv("Data/PartA.csv") 
+PartA <- PartA %>%
+  dplyr::mutate(Status = rep(1,nrow(PartA))) %>%
+  dplyr::rename(Cycles = `Thousands of Cycles`,
+                Operator = `Operator Number`)
+
+knitr::kable((PartA), caption = "Table 1. Part A Life Test", align = rep('c', 3), table.envir = 'table*') %>%
+  kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+  kableExtra::scroll_box(height = "200px")
+```
+
+Note that there is no censoring in this dataset, but the test for trend is applicable even in case of censored observations.
+
+The authors of the book on statistical methods for reliability data (mentioned above) use this dataset to conduct a log-rank test, which tests whether there is any statistically significant difference in the failure rates of the three operators. This was the original problem statement.
+
+Let us suppose that in addition to the failure rates being different, the manufacturer also suspects a trend in the failure rate comparisons i.e. the manufacturer suspects that Operator 1's failure rate is greater than Operator 2's rate, which in turn is greater than Operator 3's failure rate^[Note that a test for trend should only be applied when there is some a priori information that the alternatives are ordered.]. We will test for this trend in the data using a test that has power to detect a trend. The null and alternate hypothesis test is set up as shown below.
+
+$$
+\begin{aligned}
+&H_0: h_{Op_1}(t) = h_{Op_2}(t) = h_{Op_3}(t) \quad \text{for all } t \leq \tau, \quad \text{versus} 
+\\
+\\
+&H_A: h_{Op_1}(t) \geq h_{Op_2}(t) \geq h_{Op_3}(t) \quad \text{for some} \,  t \leq \tau \text{, with at least one strict inequality}. \quad
+\end{aligned}
+$$
+
+*h(t)* is the failure rate and $\tau$ is the largest time^[Time is measured in cycles in this example] at which all 3 operators have at least one observation at risk. 
+
+Kaplan Meir curves for the 3 operators are shown below.
+
+```{r}
+fit_PartA <- survival::survfit(
+  Surv(time = Cycles, event = Status) ~ Operator, 
+  data = PartA,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+survminer::ggsurvplot(
+  fit_PartA,
+  data = PartA,
+  risk.table = T,
+  conf.int = T
+)
+```
+
+Clearly, the survival curves for the 3 operators are very different. The overlap between the confidence intervals is also low. 
+
+First, a log rank test is performed, which tests the following hypothesis:
+
+$$
+\begin{aligned}
+&H_0: h_{Op_1}(t) = h_{Op_2}(t) = h_{Op_3}(t) \quad \text{for all } t \leq \tau, \quad \text{versus} 
+\\
+\\
+&H_A: \text{at least one of the failure rates is different for some } t \leq \tau \quad
+\end{aligned}
+$$
+
+Log rank test using *survdiff* from the *survival* package,
+
+```{r}
+diff1 <- survival::survdiff(Surv(time = Cycles, event = Status) ~ Operator, 
+  data = PartA,
+  rho = 0) #rho = 0 for a log rank test
+
+diff1
+```
+
+The p-value for the chi-squared statistic clearly shows that there is evidence of a difference in the failure rates at the 5% significance level.
+
+Next, we investigate whether there is evidence of a trend. I was unable to find a function in the *survival* package that can directly conduct a non-parametric test for trend. The test statistic will have to be calculated manually. The test statistic for the trend test is still based on the test statistic for a log rank test that we used in the previous blog article. Hence, we can still rely on the *survival* package for some of the quantities required to calculate the trend test statistic.
+
+In order to conduct a trend test, we first select a sequence of scores $a_{1} < a_{2} < ... a_{K}$. We can use any increasing set of scores. We will use a score of $a_{1} = 3$ for Operator 1, $a_{2} = 2$ for Operator 2 and $a_{3} = 1$ for Operator 3^[$a_{1}$ gets the highest score because the a priori information suggests that Operator 1's failure rate is the highest, followed by Operator 2.]. 
+
+The test statistic is given by
+
+$$
+Z = \frac{\sum_{j=1}^{K} a_{j}Z_{j}(\tau)}{\sqrt{\sum_{j=1}^{K}\sum_{q=1}^{K} a_{j}a_{q}\hat{\sigma}_{jq}}}
+$$
+When the null hypothesis is true and the sample sizes are sufficiently large, then this test statistic has a standard normal distribution.
+
+In this case, $K = 3$. $Z_{j}(\tau)$ is the sum of the weighted^[For the log rank test, the common weight shared by each group is 1, which means that the weights in the weighted difference is the number at risk at that particular event time] differences between observed and expected events at every event time. This can be directly obtained from the output of the log rank test above. We get $Z_{1} = Observed - Expected = 20 - 7.2 = 12.8$. Similarly, $Z_{2} = 5.3$ and $Z_{3} = -18.28$.
+
+The variance-covariance matrix of the $Z_{j}$'s can be obtained from the *survdiff* object of the log-rank test above.
+
+```{r}
+diff1[["var"]]
+```
+
+The values of $\hat{\sigma_{jg}}$ in the formula for the test statistic are obtained from the above variance-covariance matrix.
+
+Plugging these values into the formula for the test statitic above, we get
+
+$$
+Z = \frac{(3\times 12.8) + (2\times 5.3) + (1\times -18.28)}{\sqrt{(3\times3\times5.32) + (3\times2\times -2.41) + (3\times1\times -2.90)+ \\ (2\times3\times -2.41) + (2\times2\times 9.75) + (2\times1\times -7.33)+ \\ (1\times3\times -2.90) + (1\times2\times -7.33) + (1\times1\times 10.24)}}
+$$
+This leads to a a value of the test statistic $Z = 6.62$. The p-value is then calculated as:
+
+```{r}
+2*(1-pnorm(6.62))
+```
+
+The low p-value suggests that there is a strong evidence of a trend in the hazard rates. 
+
+## Appliance Cord
+
+To illustrate a test for trend, we will use the *ApplianceCord* dataset^[Nelson, W. B. (1982). *Applied Life Data Analysis.* Wiley.], which contains data from a life test of electric cords for a small appliance. This dataset can be accessed from the student companion website of another excellent book^[Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] on this topic as well as from DataShare, Iowa State University's open data repository through [**this link**](https://doi.org/10.25380/iastate.c.5395665). 
+
+```{r}
+ApplianceCord <- read_csv("Data/ApplianceCord.csv") 
+
+ApplianceCord <- ApplianceCord %>%
+  dplyr::mutate(Status = case_when(`Censoring Indicator` == "Failed" ~ 1, `Censoring Indicator` == "Censored" ~ 0)) %>%
+  dplyr::rename(Type = `Cord Type`)
+
+knitr::kable((ApplianceCord), caption = "Table 1. Appliance Cord Data", align = rep('c', 3))
+```
+
+The purpose of the life test was to compare a standard cord (B6) with a less expensive cord (B7) to see if there would be an important difference in the failure time distributions. The authors of the book on statistical methods for reliability data (mentioned above) use this dataset in an exercise problem that asks to fit a parametric distribution to the failure times and then make a comparison. 
+
+Instead, we will use this data here to illustrate a non-parametric trend test that has power to test the following hypothesis:
+
+$$
+\begin{aligned}
+&H_0: h_{B6}(t) = h_{B7}(t) \quad \text{for all } t \leq \tau, \quad \text{versus} 
+\\
+\\
+&H_A: h_{B6}(t) < h_{B7}(t) \quad \text{for some} \,  t \leq \tau. \quad
+\end{aligned}
+$$
+
+*h(t)* is the failure rate and $\tau$ is the largest time at which both groups have at least one observation at risk. We want to find out if there is any evidence that the failure rate of the less expensive cord (B7) is greater than the failure rate of the standard cord.
+
+Kaplan Meir curve is shown below.
+
+```{r}
+fit_ApplianceCord <- survival::survfit(
+  Surv(time = Hours, event = Status) ~ Type, 
+  data = ApplianceCord,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+survminer::ggsurvplot(
+  fit_ApplianceCord,
+  data = ApplianceCord,
+  risk.table = T,
+  conf.int = T
+)
+```
+
+
+I was unable to find a function in the *survival* package that can directly conduct a non-parametric test for trend. The test statistic we will have to be calculated manually. The test statistic for the trend test is still based on the test statistic for a log rank test that we used in the previous blog article. Hence, we will still rely on the *survival* package for some of the quantities required to calculate the trend test statistic.
+
+In order to conduct a trend test, we first select a sequence of scores $a_{1} < a_{2} < ... a_{K}$. We can use any increasing set of scores. We will use a score of $a_{1} = 6$ for the B6 cord and a score of $a_{2} = 7$ for the B7 cord.
+
+The test statistic is given by
+
+$$
+Z = \frac{\sum_{j=1}^{K} a_{j}Z_{j}(\tau)}{\sqrt{\sum_{j=1}^{K}\sum_{q=1}^{K} a_{j}a_{q}\hat{\sigma}_{jq}}}
+$$
+In our case, $K = 2$. $Z_{j}(\tau)$ is the sum of the weighted^[For the log rank test, the common weight shared by each group is 1, which means that the weights in the weighted difference is the number at risk at that particular event time] differences between observed and expected events at every event time. This can be directly obtained from the summary of a log rank test using the *survival* package.
+
+Applying the log-rank test, we get
+
+```{r}
+diff1 <- survival::survdiff(
+  survival::Surv(time = Hours, event = Status, type = 'right') ~ Type,
+  data = ApplianceCord,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+diff1
+```
+
+ROUGH
+
+```{r}
+summary(survfit(Surv(time = Hours, event = Status) ~ 1, data = ApplianceCord))
+```
+
+
+END ROUGH
+
+
+, which can be directly obtained from the log rank 
+Hence, we will rely on the package for some calculations, but the rest of the calculations for build on what is available and then manually calculate the test statistic required
+
+
+
+```{r}
+data(reliability, package = 'survival')
+imotor <- imotor
+```
+
+
+# Stratified Tests
+
+Stratified test conducts a test of hypothesis of difference in the failure rates, after adjusting for confounding variables. This is illustrated through an example below.
+
+The *capacitor* dataset from the *survival* package in R will be used^[The reliability datasets available in the *survival* package references "Meeker and Escobar, Statistical Methods for Reliability Data, 1998."]. This dataset consists of data from an experiment on the life of glass capacitors as a function of operating temperature and voltage. Testing at each combination of temperature and voltage was terminated after the fourth failure^[This is called Type II censoring]. 
+
+Note: The same dataset was analysed using parametric regression methods in another book^[Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] on a similar topic. This book is an excellent resource for those interested in this field.
+
+```{r}
+data(reliability, package = 'survival')
+capacitor <- capacitor %>%
+  dplyr::select(!fail) #Removing the column fail
+
+knitr::kable(capacitor, caption = "Table 1. Capacitor Data", align = rep('c', 5), table.envir = 'table*') %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+kableExtra::scroll_box(height = "200px")
+
+```
+
+A "1" in the status column above indicates a failure and a "0" indicates a censored observation.
+
+For the purpose of this exercise, let us suppose that our interest lies in comparing the failure rates of capacitors operating at a temperature of 170 C versus 180 C, but adjusting for the voltage. That is, we want to test the following hypothesis:
+
+$$
+\begin{aligned}
+&H_0: h_{170C,V}(t) = h_{180C,V}(t) \quad \text{for V = 200, 250, 300, 350} \text{ and } t \leq \tau, \quad \text{versus} 
+\\
+\\
+&H_A: h_{170C,V}(t) \, \text{is different to} \, h_{180C,V}(t) \, \text{for at least one V and for some} \,  t \leq \tau. \quad
+\end{aligned}
+$$
+
+A plot of the Kaplan Meir survival curve for the two operating temperatures is shown below.
+
+```{r}
+fit_capacitor <- survival::survfit(
+  Surv(time = time, event = status) ~ factor(temperature), 
+  data = capacitor,
+  conf.type = "log",
+  conf.int = 0.95
+)
+
+survminer::ggsurvplot(
+  fit_capacitor,
+  data = capacitor,
+  risk.table = T,
+  conf.int = T
+)
+```
+
+Note that the above curve ignores the voltage variable and only compares the two operating temperature groups. 
+
+Next, we conduct a log rank test, again ignoring the voltage. We will get to the stratified test, which takes voltage into consideration after this test.
+
+```{r}
+survival::survdiff(
+  Surv(time = time, event = status, type = 'right') ~ factor(temperature),
+  data = capacitor,
+  rho = 0
+)
+```
+
+The p-value of 0.1 suggests that there is no evidence of a difference in failure rates between capacitors operating at the 2 temperatures at the 5% significance level^[One can see that there is a decent amount of overlap between the confidence intervals of the two curves in the Kaplan-Meir plot, which again is not very surprising, considering that the log rank test did not reveal any evidence of difference in hazard rates.].
+
+Next, conduct a stratified test that takes the confounding variable voltage into account^[This is done by using the *strata* argument within the *survdiff* function, as shown below].  
+
+```{r}
+survival::survdiff(
+  Surv(time = time, event = status, type = 'right') ~ factor(temperature) + strata(factor(voltage)),
+  data = capacitor,
+  rho = 0
+)
+```
+
+The p-value of 0.04 suggests that there is evidence of difference in the failure rates of the capacitors operating at 170 C vs 180 C at the 5% significance level, once the comparison is adjusted for different voltages. 
+
+What does this mean though? It means that we have found evidence against at least one of the following comparisons, at the 5% significance level:
+
+$$
+\begin{aligned}
+h_{170 C,200 V}(t) = h_{180 C,200 V}(t),\\ h_{170 C,250 V}(t) = h_{180 C,250 V}(t), \\ h_{170 C,300 V}(t) = h_{180 C,300 V}(t), \\ h_{170 C,350 V}(t) = h_{180 C,350 V}(t).
+\end{aligned}
+$$
+Comparing the 4 different stratas (voltages) separately, we get the following. 
+
+```{r}
+survival::survdiff(
+  Surv(time = time, event = status, type = 'right') ~ factor(temperature),
+  data = capacitor[which(capacitor$voltage==200),],
+  rho = 0
+)
+
+survival::survdiff(
+  Surv(time = time, event = status, type = 'right') ~ factor(temperature),
+  data = capacitor[which(capacitor$voltage==250),],
+  rho = 0
+)
+
+survival::survdiff(
+  Surv(time = time, event = status, type = 'right') ~ factor(temperature),
+  data = capacitor[which(capacitor$voltage==300),],
+  rho = 0
+)
+
+survival::survdiff(
+  Surv(time = time, event = status, type = 'right') ~ factor(temperature),
+  data = capacitor[which(capacitor$voltage==350),],
+  rho = 0
+)
+```
+
+The p-value is significant at 5% only for the 250 V strata. Since the number of events in this dataset is very small, these results must be interpreted with caution. 
+
+
+
+# Acknowledgements
+
+1. Most of what I have learnt about time-to-event analysis is from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger).
+
+2. The dataset I have used above is used in one of the examples in the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual).
+
+3. This article's format is a style that Edward Tufte uses in his books and handouts. I have used the *tufte* library in R and am grateful to the authors of this package. I should also mention that I found out about this style when I stumbled across an article on Survival Analysis by Mark Bounthavong, which was also written using the *tufte* package.
+
+# End
+
+I hope you enjoyed reading this blog post! If you have any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at shishir909@gmail.com.
+
+
+```{r ROUGH DO NOT RUN, eval=FALSE, include=FALSE}
+## binary vector
+ten(c(1, 0, 1, 0, 1))
+ten_obj_snubber <- ten(fit_snubber)
+comp(ten_obj_snubber)
+
+## Surv object
+df0 <- data.frame(t=c(1, 1, 2, 3, 5, 8, 13, 21),
+e=rep(c(0, 1), 4))
+s1 <- with(df0, Surv(t, e, type="right"))
+ten(s1)
+
+survival::survdiff(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber.new,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+#Log rank test with weight = 1
+
+survival::survdiff(survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design, data = snubber,rho = 0) ##rho = 0 gives log rank test
+
+ggsurvplot(fit, data = circuitPack, risk.table = T, ylim = c(0.95,1),  conf.int = T, pval = T, pval.method = T, pval.coord = c(50,0.97), pval.method.coord = c(50,0.96))
+
+survival::survdiff(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+
+
+
+count_gt1.index <- which(snubber$Count > 1)
+count_adj <- snubber$Count[count_gt1.index] -1
+
+snubber.split <- snubber[rep(row.names(snubber)[count_gt1.index],count_adj),]
+
+snubber.new <- rbind(snubber,snubber.split)
+
+sum(snubber$Count)
+
+
+survival::survdiff(
+  survival::Surv(time = Cycles, event = Status, type = 'right') ~ Design,
+  data = snubber.new,
+  rho = 0
+) ##rho = 0 gives log rank test
+
+# knitr::kable(snubber, caption = "Table 1. Snubber", align = rep('c', 5), table.envir = 'table*') %>%
+# kableExtra::scroll_box(height = "200px")
+
+#kableExtra::scroll_box(width = "750px", height = "200px")
+```
+
+
+
+
+
+
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
+
+
