@@ -6,3 +6,5 @@ As I finish reading a specific chapter from the Survival Analysis book, I will p
 
 ## Article 1: Time to event analysis: An Introduction (https://rpubs.com/shishir909/1188293) 
 ## Article 2: Competing Risks in Failure Time Data (https://rpubs.com/shishir909/1190065)
+## Article 3: Hypothesis Testing of Failure Time Data: Part I (https://rpubs.com/shishir909/1199328)
+## Article 4: Hypothesis Testing of Failure Time Data: Part II (https://rpubs.com/shishir909/1226309)
