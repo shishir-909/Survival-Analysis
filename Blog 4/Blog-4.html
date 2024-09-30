@@ -12,7 +12,7 @@
 
 <meta name="author" content="Shishir Rao" />
 
-<meta name="date" content="2024-09-27" />
+<meta name="date" content="2024-09-29" />
 
 <title>Hypothesis Testing of Failure Time Data: Part II</title>
 
@@ -314,22 +314,20 @@ if (window.hljs) {
 
 
 <h1 class="title toc-ignore">Hypothesis Testing of Failure Time Data: Part II</h1>
-<h3 class="subtitle">Application of a non-parametric stratified test and a test for trend using R</h3>
+<h3 class="subtitle">Application of a non-parametric stratified test and a test for trend using R Statistical Software</h3>
 <h4 class="author">Shishir Rao</h4>
-<h4 class="date">2024-09-27</h4>
+<h4 class="date">2024-09-29</h4>
 
 
 
 <div id="introduction" class="section level1">
 <h1>Introduction</h1>
-<p>This article is a continuation of the series where I apply the concepts learnt from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger) to datasets from reliability. The book focuses on applications in biology and medicine, but the methods described are equally applicable to other fields like reliability and quality assurance.</p>
-<p>The last article<label for="tufte-sn-1" class="margin-toggle sidenote-number">1</label><input type="checkbox" id="tufte-sn-1" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">1</span> Hypothesis Testing of Failure Time Data: Part I can be accessed <a href="https://rpubs.com/shishir909/1199328"><strong>here</strong></a></span>shows an application of a non-parametric log rank test where the aim was to test whether failure rates are different among two or more groups. This article is a continuation of the non-parametric testing methods by extending its application to a test that has power to detect a trend in the failure rate. The second application demonstrated in this article extends the log rank test by including an adjustment for confounding variables that could possibly affect the failure rates. This is done using a stratified test.</p>
+<p>This article is a continuation of the series of articles where I apply the concepts learnt from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger) to datasets from reliability. The book focuses on applications in biology and medicine, but the methods described are equally applicable to other fields like reliability and quality assurance.</p>
+<p>The last article<label for="tufte-sn-1" class="margin-toggle sidenote-number">1</label><input type="checkbox" id="tufte-sn-1" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">1</span> Hypothesis Testing of Failure Time Data: Part I can be accessed <a href="https://rpubs.com/shishir909/1199328"><strong>here</strong></a></span> shows an application of a non-parametric log rank test where the aim was to test whether failure rates are different among two or more groups. This article is a continuation of the non-parametric testing methods by extending its application to a test that has power to detect a trend in the failure rate. The second application demonstrated here extends the log rank test by including an adjustment for confounding variables that could possibly affect the failure rates. This is done using a stratified test.</p>
 </div>
 <div id="test-for-trend" class="section level1">
 <h1>Test for trend</h1>
-<div id="part-a" class="section level2">
-<h2>Part A</h2>
-<p>To illustrate a test for trend, we will use the <em>PartA</em> dataset, which contains data from an experiment conducted to compare three life test operators. The operators perform life testing on a machine tool part. The manufacturer suspected that the manual nature of the life test contributed to variability in the results of the life tests. This dataset is from another excellent book<label for="tufte-sn-2" class="margin-toggle sidenote-number">2</label><input type="checkbox" id="tufte-sn-2" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">2</span> Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)</span> on the topic of statistical analysis of reliability data and is available on the book’s student companion website. It can also be accessed from DataShare, Iowa State University’s open data repository through <a href="https://doi.org/10.25380/iastate.c.5395665"><strong>this link</strong></a>.</p>
+<p>To illustrate a test for trend, we will use the <em>PartA</em> dataset, which contains data from an experiment conducted to compare three life test operators. The operators perform life testing on a machine tool part and the manufacturer suspects that the manual nature of the life test contributes to variability in the results of the life tests. This dataset is from another excellent book<label for="tufte-sn-2" class="margin-toggle sidenote-number">2</label><input type="checkbox" id="tufte-sn-2" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">2</span> Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)</span> on the topic of statistical analysis of reliability data and is available on the book’s student companion website. It can also be accessed from DataShare, Iowa State University’s open data repository through <a href="https://doi.org/10.25380/iastate.c.5395665"><strong>this link</strong></a>.</p>
 <p>Load the dataset</p>
 <pre class="r"><code>PartA &lt;- read_csv(&quot;Data/PartA.csv&quot;) </code></pre>
 <pre><code>## Rows: 60 Columns: 2
@@ -1031,8 +1029,8 @@ Op3
 </tbody>
 </table>
 </div>
-<p>Note that there is no censoring in this dataset, but the test for trend is applicable even in case of censored observations.</p>
-<p>The authors of the book on statistical methods for reliability data (mentioned above) use this dataset to conduct a log-rank test, which tests whether there is any statistically significant difference in the failure rates of the three operators. This was the original problem statement.</p>
+<p>Note that there is no censoring in this dataset, but the test for trend is applicable even in the presence of right censored observations.</p>
+<p>The authors of the book on statistical methods for reliability data (mentioned above) use this dataset to conduct a log-rank test, which tests whether there is any statistically significant difference in the failure rates of the three operators. This was the original context of this problem.</p>
 <p>Let us suppose that in addition to the failure rates being different, the manufacturer also suspects a trend in the failure rate comparisons i.e. the manufacturer suspects that Operator 1’s failure rate is greater than Operator 2’s rate, which in turn is greater than Operator 3’s failure rate<label for="tufte-sn-3" class="margin-toggle sidenote-number">3</label><input type="checkbox" id="tufte-sn-3" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">3</span> Note that a test for trend should only be applied when there is some a priori information that the alternatives are ordered.</span>. We will test for this trend in the data using a test that has power to detect a trend. The null and alternate hypothesis test is set up as shown below.</p>
 <p><span class="math display">\[
 \begin{aligned}
@@ -1068,7 +1066,7 @@ survminer::ggsurvplot(
 &amp;H_A: \text{at least one of the failure rates is different for some } t \leq \tau \quad
 \end{aligned}
 \]</span></p>
-<p>Log rank test using <em>survdiff</em> from the <em>survival</em> package,</p>
+<p>Log rank test using the <em>survdiff</em> function from the <em>survival</em> package is shown below.</p>
 <pre class="r"><code>diff1 &lt;- survival::survdiff(Surv(time = Cycles, event = Status) ~ Operator, 
   data = PartA,
   rho = 0) #rho = 0 for a log rank test
@@ -1084,37 +1082,36 @@ diff1</code></pre>
 ## Operator=Op3 20       20    38.28      8.73     32.62
 ## 
 ##  Chisq= 46.1  on 2 degrees of freedom, p= 1e-10</code></pre>
-<p>The p-value for the chi-squared statistic clearly shows that there is evidence of a difference in the failure rates at the 5% significance level.</p>
-<p>Next, we investigate whether there is evidence of a trend. I was unable to find a function in the <em>survival</em> package that can directly conduct a non-parametric test for trend. The test statistic will have to be calculated manually. The test statistic for the trend test is still based on the test statistic for a log rank test that we used in the previous blog article. Hence, we can still rely on the <em>survival</em> package for some of the quantities required to calculate the trend test statistic.</p>
-<p>In order to conduct a trend test, we first select a sequence of scores <span class="math inline">\(a_{1} &lt; a_{2} &lt; ... a_{K}\)</span>. We can use any increasing set of scores. We will use a score of <span class="math inline">\(a_{1} = 3\)</span> for Operator 1, <span class="math inline">\(a_{2} = 2\)</span> for Operator 2 and <span class="math inline">\(a_{3} = 1\)</span> for Operator 3<label for="tufte-sn-5" class="margin-toggle sidenote-number">5</label><input type="checkbox" id="tufte-sn-5" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">5</span> <span class="math inline">\(a_{1}\)</span> gets the highest score because the a priori information suggests that Operator 1’s failure rate is the highest, followed by Operator 2.</span>.</p>
+<p>The p-value for the chi-squared statistic is very small, clearly showing that there is evidence of a difference in the failure rates at the 5% significance level.</p>
+<p>Next, we investigate whether there is evidence of a trend. I was unable to find a function in the <em>survival</em> package that can directly conduct a non-parametric test for trend. The test statistic will have to be calculated manually. This test statistic is still based on the test statistic for a log rank test that we conducted above. Hence, we can rely on the <em>survival</em> package for some of the quantities required to calculate the trend test statistic.</p>
+<p>In order to conduct a trend test, we first select a sequence of scores <span class="math inline">\(a_{1} &lt; a_{2} &lt; ... a_{K}\)</span>. We can use any increasing set of scores. We will use a score of <span class="math inline">\(a_{1} = 3\)</span> for Operator 1, <span class="math inline">\(a_{2} = 2\)</span> for Operator 2 and <span class="math inline">\(a_{3} = 1\)</span> for Operator 3<label for="tufte-sn-5" class="margin-toggle sidenote-number">5</label><input type="checkbox" id="tufte-sn-5" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">5</span> <span class="math inline">\(a_{1}\)</span> gets the highest score because the a priori information from the manufacturer is that Operator 1’s failure rate is the highest, followed by Operator 2.</span>.</p>
 <p>The test statistic is given by</p>
 <p><span class="math display">\[
 Z = \frac{\sum_{j=1}^{K} a_{j}Z_{j}(\tau)}{\sqrt{\sum_{j=1}^{K}\sum_{q=1}^{K} a_{j}a_{q}\hat{\sigma}_{jq}}}
 \]</span>
-When the null hypothesis is true and the sample sizes are sufficiently large, then this test statistic has a standard normal distribution.</p>
-<p>In this case, <span class="math inline">\(K = 3\)</span>. <span class="math inline">\(Z_{j}(\tau)\)</span> is the sum of the weighted<label for="tufte-sn-6" class="margin-toggle sidenote-number">6</label><input type="checkbox" id="tufte-sn-6" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">6</span> For the log rank test, the common weight shared by each group is 1, which means that the weights in the weighted difference is the number at risk at that particular event time</span> differences between observed and expected events at every event time. This can be directly obtained from the output of the log rank test above. We get <span class="math inline">\(Z_{1} = Observed - Expected = 20 - 7.2 = 12.8\)</span>. Similarly, <span class="math inline">\(Z_{2} = 5.3\)</span> and <span class="math inline">\(Z_{3} = -18.28\)</span>.</p>
-<p>The variance-covariance matrix of the <span class="math inline">\(Z_{j}\)</span>’s can be obtained from the <em>survdiff</em> object of the log-rank test above.</p>
+where <span class="math inline">\(K\)</span> is the number of groups, which is 3 in our case and <span class="math inline">\(Z_{j}(\tau)\)</span> is the sum of the weighted<label for="tufte-sn-6" class="margin-toggle sidenote-number">6</label><input type="checkbox" id="tufte-sn-6" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">6</span> For the log rank test, the common weight shared by each group is 1, which means that the weights in the weighted difference is the number at risk at that particular event time. Refer to any of the above mentioned book for details on the log rank test.</span> differences between observed and expected events at every event time. This can be directly obtained from the output of the log rank test above. We get <span class="math inline">\(Z_{1} = Observed - Expected = 20 - 7.2 = 12.8\)</span>. Similarly, <span class="math inline">\(Z_{2} = 5.3\)</span> and <span class="math inline">\(Z_{3} = -18.28\)</span></p>
+<p>When the null hypothesis is true and the sample sizes are sufficiently large, then this test statistic has a standard normal distribution.</p>
+<p>The variance-covariance matrix of the <span class="math inline">\(Z_{j}\)</span>’s can be obtained from the <em>survdiff</em> object of the log-rank test, as shown below.</p>
 <pre class="r"><code>diff1[[&quot;var&quot;]]</code></pre>
 <pre><code>##           [,1]      [,2]      [,3]
 ## [1,]  5.322160 -2.417677 -2.904483
 ## [2,] -2.417677  9.755310 -7.337633
 ## [3,] -2.904483 -7.337633 10.242116</code></pre>
 <p>The values of <span class="math inline">\(\hat{\sigma_{jg}}\)</span> in the formula for the test statistic are obtained from the above variance-covariance matrix.</p>
-<p>Plugging these values into the formula for the test statitic above, we get</p>
+<p>Plugging these values into the formula for the test statistic, we get</p>
 <p><span class="math display">\[
 Z = \frac{(3\times 12.8) + (2\times 5.3) + (1\times -18.28)}{\sqrt{(3\times3\times5.32) + (3\times2\times -2.41) + (3\times1\times -2.90)+ \\ (2\times3\times -2.41) + (2\times2\times 9.75) + (2\times1\times -7.33)+ \\ (1\times3\times -2.90) + (1\times2\times -7.33) + (1\times1\times 10.24)}}
 \]</span>
 This leads to a a value of the test statistic <span class="math inline">\(Z = 6.62\)</span>. The p-value is then calculated as:</p>
 <pre class="r"><code>2*(1-pnorm(6.62))</code></pre>
 <pre><code>## [1] 3.591993e-11</code></pre>
-<p>The low p-value suggests that there is a strong evidence of a trend in the hazard rates.</p>
-</div>
+<p>The low p-value suggests that there is a strong evidence that the trend in the failure rates are as per the a priori information that the manufacturer suspected.</p>
 </div>
 <div id="stratified-tests" class="section level1">
 <h1>Stratified Tests</h1>
 <p>Stratified test conducts a test of hypothesis of difference in the failure rates, after adjusting for confounding variables. This is illustrated through an example below.</p>
 <p>The <em>capacitor</em> dataset from the <em>survival</em> package in R will be used<label for="tufte-sn-7" class="margin-toggle sidenote-number">7</label><input type="checkbox" id="tufte-sn-7" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">7</span> The reliability datasets available in the <em>survival</em> package references “Meeker and Escobar, Statistical Methods for Reliability Data, 1998.”</span>. This dataset consists of data from an experiment on the life of glass capacitors as a function of operating temperature and voltage. Testing at each combination of temperature and voltage was terminated after the fourth failure<label for="tufte-sn-8" class="margin-toggle sidenote-number">8</label><input type="checkbox" id="tufte-sn-8" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">8</span> This is called Type II censoring</span>. This dataset is also available in the book previously mentioned<label for="tufte-sn-9" class="margin-toggle sidenote-number">9</label><input type="checkbox" id="tufte-sn-9" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">9</span> Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)</span> and can be accessed through the book’s student companion website or from DataShare, Iowa State University’s open data repository through <a href="https://doi.org/10.25380/iastate.c.5395665"><strong>this link</strong></a>.</p>
-<p>The book analyzed the same dataset using a parametric regression method. In this article, we will use it to perform a non-parametric stratified test for difference in hazard rates.</p>
+<p>The book authors analyzed this data using a parametric regression method. In this article, we will use it to perform a non-parametric stratified test for difference in hazard rates.</p>
 <pre class="r"><code>data(reliability, package = &#39;survival&#39;)
 capacitor &lt;- capacitor %&gt;%
   dplyr::select(!fail) #Removing the column fail
@@ -2044,7 +2041,7 @@ status
 </tbody>
 </table>
 </div>
-<p>A “1” in the status column above indicates a failure and a “0” indicates a censored observation.</p>
+<p>A “1” in the status column indicates a failure and a “0” indicates a right censored observation.</p>
 <p>For the purpose of this exercise, let us suppose that our interest lies in comparing the failure rates of capacitors operating at a temperature of 170 C versus 180 C, but adjusting for the voltage. That is, we want to test the following hypothesis:</p>
 <p><span class="math display">\[
 \begin{aligned}
@@ -2086,8 +2083,8 @@ survminer::ggsurvplot(
 ## factor(temperature)=180 32       16     12.2     1.214      2.19
 ## 
 ##  Chisq= 2.2  on 1 degrees of freedom, p= 0.1</code></pre>
-<p>The p-value of 0.1 suggests that there is no evidence of a difference in failure rates between capacitors operating at the 2 temperatures at the 5% significance level<label for="tufte-sn-10" class="margin-toggle sidenote-number">10</label><input type="checkbox" id="tufte-sn-10" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">10</span> One can see that there is a decent amount of overlap between the confidence intervals of the two curves in the Kaplan-Meir plot, which again is not very surprising, considering that the log rank test did not reveal any evidence of difference in hazard rates either.</span>.</p>
-<p>Next, conduct a stratified test that takes the confounding variable voltage into account<label for="tufte-sn-11" class="margin-toggle sidenote-number">11</label><input type="checkbox" id="tufte-sn-11" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">11</span> This is done by using the <em>strata</em> argument within the <em>survdiff</em> function, as shown below</span>.</p>
+<p>The p-value of 0.1 suggests that there is no evidence of a difference in failure rates between capacitors operating at the 2 temperatures at the 5% significance level<label for="tufte-sn-10" class="margin-toggle sidenote-number">10</label><input type="checkbox" id="tufte-sn-10" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">10</span> There is a decent amount of overlap between the confidence intervals of the two curves in the above Kaplan-Meir plot, which again is not very surprising, considering that the log rank test did not reveal any evidence of difference in hazard rates either.</span>.</p>
+<p>Next, we conduct a stratified test that takes the confounding variable voltage into account<label for="tufte-sn-11" class="margin-toggle sidenote-number">11</label><input type="checkbox" id="tufte-sn-11" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">11</span> This is done by using the <em>strata</em> function within the <em>survdiff</em> function, as shown below</span>.</p>
 <pre class="r"><code>survival::survdiff(
   Surv(time = time, event = status, type = &#39;right&#39;) ~ factor(temperature) + strata(factor(voltage)),
   data = capacitor,
@@ -2172,15 +2169,46 @@ The un-stratified log rank test did not suggest any difference in the failure ra
 ## factor(temperature)=180 8        4      3.4    0.1049     0.214
 ## 
 ##  Chisq= 0.2  on 1 degrees of freedom, p= 0.6</code></pre>
-<p>The p-value is significant at 5% only for the 250 V strata. Since the number of events in this dataset is very small, these results must be interpreted with caution<label for="tufte-sn-12" class="margin-toggle sidenote-number">12</label><input type="checkbox" id="tufte-sn-12" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">12</span> The treatment of this problem using a parametric regression model is a much more detailed analysis and can be found in the previously referenced book.</span>.</p>
+<p>The p-value is significant at 5% only for the 250 V strata. Since the number of events in this dataset is very small, these results must be interpreted with caution<label for="tufte-sn-12" class="margin-toggle sidenote-number">12</label><input type="checkbox" id="tufte-sn-12" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">12</span> The authors of the book treat this dataset using a parametric regression model, which is a much more detailed analysis and can be found in Chapter 17 of the book.</span>.</p>
+</div>
+<div id="conclusion" class="section level1">
+<h1>Conclusion</h1>
+<p>Application of two non-parametric tests were demonstrated in this article - one for testing for a trend in the failure rate and another for adjusting for confounding variables in the comparison, using a stratified test. The stratified test is feasible when the number of stratas are not very large or when a continuous confounding variable can be discretized into a workable number of stratas. The other approach in such problems is to use regression methods - parametric or semi parametric, in order to account for confounding variables.</p>
+<p>There are a few points that we must keep in mind when applying the tests discussed so far in this article as well as the previous article (log rank, stratified and trend).</p>
+<ol style="list-style-type: lower-roman">
+<li><p>The observations are assumed to be independent i.e. the time to failure of the observations are not dependent on each other in any way.</p></li>
+<li><p>Censoring is assumed to be non-informative i.e. event times (failure times) and censoring times are independent of each other.</p></li>
+<li><p>The log rank tests have optimal power to detect difference in failure rates when the hazards (failure rates) between the groups are proportional i.e. the failure rate curves of the groups do not cross. When the hazard rate curves do cross, early positive differnces may be cancelled out by later negative differences (or vice versa) and may mislead us into concluding that there is no difference between the groups<label for="tufte-sn-13" class="margin-toggle sidenote-number">13</label><input type="checkbox" id="tufte-sn-13" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">13</span> If the hazards are not proportional, there are other tests, like Renyi type tests, that can be conducted to test for a difference in the failure rates.</span>.</p></li>
+</ol>
 </div>
 <div id="acknowledgements" class="section level1">
 <h1>Acknowledgements</h1>
 <ol style="list-style-type: decimal">
 <li><p>Most of what I have learnt about time-to-event analysis is from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger).</p></li>
-<li><p>The dataset I have used above is used in one of the examples in the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual).</p></li>
+<li><p>The datasets in this article are from the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual). This has also been an excellent resource in my journey to learn about modeling failure times.</p></li>
+<li><p>All analyses were performed using R Statistical Software(v4.4.1; R Core Team 2024). The <em>survival</em> R package(v3.7.0; Therneau T 2024) was extensively used. Please refer to next section for all the packages used, their versions and the names of the package developers who deserve credit for building these amazing open source packages.</p></li>
 <li><p>This article’s format is a style that Edward Tufte uses in his books and handouts. I have used the <em>tufte</em> library in R and am grateful to the authors of this package. I should also mention that I found out about this style when I stumbled across an article on Survival Analysis by Mark Bounthavong, which was also written using the <em>tufte</em> package.</p></li>
 </ol>
+</div>
+<div id="credits-for-r-packages-used" class="section level1">
+<h1>Credits for R packages used</h1>
+<pre class="r"><code>report::cite_packages()</code></pre>
+<pre><code>##   - Grolemund G, Wickham H (2011). &quot;Dates and Times Made Easy with lubridate.&quot; _Journal of Statistical Software_, *40*(3), 1-25. &lt;https://www.jstatsoft.org/v40/i03/&gt;.
+##   - Kassambara A (2023). _ggpubr: &#39;ggplot2&#39; Based Publication Ready Plots_. R package version 0.6.0, &lt;https://CRAN.R-project.org/package=ggpubr&gt;.
+##   - Kassambara A, Kosinski M, Biecek P (2021). _survminer: Drawing Survival Curves using &#39;ggplot2&#39;_. R package version 0.4.9, &lt;https://CRAN.R-project.org/package=survminer&gt;.
+##   - Müller K, Wickham H (2023). _tibble: Simple Data Frames_. R package version 3.2.1, &lt;https://CRAN.R-project.org/package=tibble&gt;.
+##   - R Core Team (2024). _R: A Language and Environment for Statistical Computing_. R Foundation for Statistical Computing, Vienna, Austria. &lt;https://www.R-project.org/&gt;.
+##   - Therneau T (2024). _A Package for Survival Analysis in R_. R package version 3.7-0, &lt;https://CRAN.R-project.org/package=survival&gt;. Terry M. Therneau, Patricia M. Grambsch (2000). _Modeling Survival Data: Extending the Cox Model_. Springer, New York. ISBN 0-387-98784-3.
+##   - Wickham H (2016). _ggplot2: Elegant Graphics for Data Analysis_. Springer-Verlag New York. ISBN 978-3-319-24277-4, &lt;https://ggplot2.tidyverse.org&gt;.
+##   - Wickham H (2023). _forcats: Tools for Working with Categorical Variables (Factors)_. R package version 1.0.0, &lt;https://CRAN.R-project.org/package=forcats&gt;.
+##   - Wickham H (2023). _stringr: Simple, Consistent Wrappers for Common String Operations_. R package version 1.5.1, &lt;https://CRAN.R-project.org/package=stringr&gt;.
+##   - Wickham H, Averick M, Bryan J, Chang W, McGowan LD, François R, Grolemund G, Hayes A, Henry L, Hester J, Kuhn M, Pedersen TL, Miller E, Bache SM, Müller K, Ooms J, Robinson D, Seidel DP, Spinu V, Takahashi K, Vaughan D, Wilke C, Woo K, Yutani H (2019). &quot;Welcome to the tidyverse.&quot; _Journal of Open Source Software_, *4*(43), 1686. doi:10.21105/joss.01686 &lt;https://doi.org/10.21105/joss.01686&gt;.
+##   - Wickham H, François R, Henry L, Müller K, Vaughan D (2023). _dplyr: A Grammar of Data Manipulation_. R package version 1.1.4, &lt;https://CRAN.R-project.org/package=dplyr&gt;.
+##   - Wickham H, Henry L (2023). _purrr: Functional Programming Tools_. R package version 1.0.2, &lt;https://CRAN.R-project.org/package=purrr&gt;.
+##   - Wickham H, Hester J, Bryan J (2024). _readr: Read Rectangular Text Data_. R package version 2.1.5, &lt;https://CRAN.R-project.org/package=readr&gt;.
+##   - Wickham H, Vaughan D, Girlich M (2024). _tidyr: Tidy Messy Data_. R package version 1.3.1, &lt;https://CRAN.R-project.org/package=tidyr&gt;.
+##   - Xie Y, Allaire J (2023). _tufte: Tufte&#39;s Styles for R Markdown Documents_. R package version 0.13, &lt;https://CRAN.R-project.org/package=tufte&gt;.
+##   - Zhu H (2024). _kableExtra: Construct Complex Table with &#39;kable&#39; and Pipe Syntax_. R package version 1.4.0, &lt;https://CRAN.R-project.org/package=kableExtra&gt;.</code></pre>
 </div>
 <div id="end" class="section level1">
 <h1>End</h1>
