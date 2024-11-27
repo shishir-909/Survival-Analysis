@@ -39,11 +39,11 @@ The four previous articles that I wrote were based on non-parametric methods in 
 
 The following article demonstrates the application of parametric regression modeling to data from a life test of ceramic ball bearings and is from a paper by McCool (1980)^[McCool, J. I. (1980). Confidence limits for Weibull regression with censored data. *IEEE Transactions on Reliability 29*, 145–150.]. The methods that I employ in this analysis are from  another excellent book^[Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] that I have been referring to recently. The data set also appears as an exercise problem in this book and the authors have made it publicly available on DataShare, Iowa State University's open data repository which can be accessed through [**this link**](https://iastate.figshare.com/articles/dataset/Reliability_Data_Laboratory_Failure-Time_and_Single-Time_Strength_Data/14454753?backTo=%2Fcollections%2FData_Sets_Used_in_Statistical_Methods_for_Reliability_Data_Second_Edition_%2F5395665&file=28330266). 
 
-The R statistical programming language is used for all computations and plots below. Unlike my previous articles, I have not shown the R code within the article, but they are available on my Github page and can be accessed here. The code for some of the plots are a bit lengthy and I wanted to avoid code chunks taking up a lot of space on this page. 
+The R statistical programming language is used for all computations and plots below. Unlike my previous articles, I have not shown the R code within the article, but they are available on my Github page and can be accessed here. The code for some of the plots are a bit lengthy and I wanted to avoid code chunks taking up space on this page. 
 
 # Exploratory Analysis
 
-Ten specimens were tested at each of the four levels of stress, as shown in the table below.
+Ten specimens were tested at each of the four levels of stress, as shown in table 1 below. The time-to-failure is recorded in terms of "Millions of Revolutions".
 
 ```{r Load Table, echo=FALSE, tab.cap="Table 1. Ceramic Bearings Life Test Data"}
 ceramic <- read_csv("Data/CeramicBearing02.csv", show_col_types = FALSE)
@@ -63,7 +63,7 @@ ceramic <- ceramic %>%
   dplyr::mutate(delta = rep(1,nrow(ceramic))) #No censored observations
 ```
 
-The plot of revolutions vs stress on linear axes and on log-log axes are shown below. The plot on the log-log axes suggests a linear relationship between log revolutions and log stress. Hence, we will continue with the log transformation of the variables in our analysis.
+The plot of revolutions vs stress on linear axes and on log-log axes are shown in Fig.1 and Fig.2 below. The plot on the log-log axes suggests a linear relationship between log revolutions and log stress. Hence, we will consider the log transformation later in the article in the regression model.
 
 ```{r NA, eval=FALSE, include=FALSE}
 p1 <- ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + ggtitle("Linerar axes")
@@ -102,7 +102,7 @@ The distribution of $\Phi$ determines the time-to-failure distribution. For exam
 
 The log-normal and Weibull distributions are widely used in describing time-to-failure distributions in reliability applications. The Weibull distribution offers flexibility by allowing the modeling of different shapes of the failure rate (increasing, decreasing or constant) while log-normal distribution has shown to be a good distribution to describe those failures that are of a fatigue-stress nature. We will consider these two distributions in this application.
 
-Probability plots for each level of stress are plotted on two different graphs below. The first graph is a log-normal probability plot and the second graph is a Weibull probability plot. 
+Probability plots for each level of stress are plotted on two different graphs below. Fig.4 shows a log-normal probability plot and Fig.5 shows a Weibull probability plot. 
 
 ```{r CDF & ML fits SepDists, include=FALSE}
 #Fig 17.7 a and b equivalent for ceramic data
@@ -133,11 +133,23 @@ while(i <= length(uniqueStress)){
   
   para_fit_logNormal <- survival::survreg(Surv(Revolutions, delta) ~ 1, data = df, dist = "lognormal")
   
-  Fig17.a_MLest[[i]] <- c(para_fit_logNormal[["coefficients"]], para_fit_logNormal[["scale"]],para_fit_logNormal[["loglik"]][2]) 
+  Fig17.a_MLest[[i]] <- c(
+    para_fit_logNormal[["coefficients"]], #mu
+    para_fit_logNormal[["scale"]], #sigma
+    para_fit_logNormal[["loglik"]][2], #log likelihood
+    sqrt(para_fit_logNormal[["var"]][1, 1]), #s.e of mu
+    (para_fit_logNormal[["scale"]] * sqrt(para_fit_logNormal[["var"]][2, 2])) #s.e of scale
+  ) 
   
   para_fit_weibull <- survival::survreg(Surv(Revolutions, delta) ~ 1, data = df, dist = "weibull")
   
-  Fig17.b_MLest[[i]] <- c(para_fit_weibull[["coefficients"]], para_fit_weibull[["scale"]],para_fit_weibull[["loglik"]][2])
+  Fig17.b_MLest[[i]] <- c(
+    para_fit_weibull[["coefficients"]], #mu
+    para_fit_weibull[["scale"]], #sigma
+    para_fit_weibull[["loglik"]][2], #log-likelihood
+    sqrt(para_fit_weibull[["var"]][1, 1]), #s.e of mu
+    (para_fit_weibull[["scale"]] * sqrt(para_fit_weibull[["var"]][2, 2])) #s.e of sigma
+  )
   
   i = i + 1
    
@@ -280,28 +292,85 @@ ggplot() + geom_point(
 ) + ggtitle(label = "Weibull") + scale_color_manual(name="Stress",values = cols)
 ```
 
-The points on the plot are the CDF (cumulative distribution function) estimates^[The points are plotted at the mid-point of the jump where the CDF increases on a Kaplan Meir curve. This plotting position is useful when assessing an ML fit (lines on the plot) graphically and to compare with the non-parametric estimates (points on the plot).] and the lines are based on the ML (maximum likelihood) estimates of the respective distribution parameters.
+The points on the plot are the non-parametric CDF estimates^[The points are plotted at the mid-point of the jump where the CDF increases on a Kaplan Meir curve. This plotting position is useful when assessing an ML fit (lines on the plot) graphically and to compare with the non-parametric estimates (points on the plot).] and the lines are based on the ML (maximum likelihood) estimates of the respective distribution parameters.
 
-Looking at both plots in Fig.4 and Fig.5, there is nothing to suggest that either plot deviates too much from the assumed distributions. In fact, in many applications, several parametric models may provide reasonable fits to the data^[Mentioned in Chapter 12 of the aforementioned book by John P. Klein and Melvin L. Moescheberger]. We are mainly looking for any indication that a particular distribution is *definitely* not a good fit, rather than *proving* that a the data fits a particular distribution. The paper by McCool uses a Weibull distribution to model this data. We will continue with the same distribution and revisit this  assumption when we check the residuals from the regression model. 
+Looking at both plots in Fig.4 and Fig.5, there is nothing to suggest that either plot deviates too much from the assumed distributions. In fact, in many applications, several parametric models may provide reasonable fits to the data^[Mentioned in Chapter 12 of the aforementioned book by John P. Klein and Melvin L. Moescheberger]. We are mainly looking for any indication that a particular distribution is *definitely* not a good fit, rather than *proving* that the data fits a particular distribution. The paper by McCool uses a Weibull distribution to model this data. We will continue with the same distribution and revisit this  assumption when we check the residuals from the regression model. 
 
-Plotting all the stress levels on the same plot helps in assessing the commonly used assumption that the Weibull shape parameter $\sigma$ is constant across all the stress levels. This is because the slope of the ML fit is related to the shape parameter $\sigma$. The slopes of the lines in Fig.4 do look different, especially the ML line for a stress value of 0.87 Mpsi, but are these differences due to random variation or are they practically significant? I don't think there is any easy way to answer this question, especially for someone who is new to this kind of analysis. This is where I feel that the experience of working on many fatigue-stress kind of applications will help. Nevertheless, we will try to answer this question through a likelihood ratio test, comparing the model with separate distributions and a model where the shape parameter is constrained to be equal across all values of stress.
+Table 2 shows the ML estimates of the parameters $\mu$ and $\sigma$ when time-to-failure is assumed to be distributed Weibull. These are the paramters used to determine the ML fit lines in Fig.4.
 
-Fig.6 below shows another Weibull plot with the shape parameter constrained across all levels of stress. 
+```{r Prep ML table 2, include=FALSE}
+Fig4.paras <- data.frame(
+  mu = c(
+    Fig17.b_MLest[["0.87"]][1],
+    Fig17.b_MLest[["0.99"]][1],
+    Fig17.b_MLest[["1.09"]][1],
+    Fig17.b_MLest[["1.18"]][1]
+  ),
+  se.mu = c(
+    Fig17.b_MLest[["0.87"]][4],
+    Fig17.b_MLest[["0.99"]][4],
+    Fig17.b_MLest[["1.09"]][4],
+    Fig17.b_MLest[["1.18"]][4]
+  ),
+  sigma = c(
+    Fig17.b_MLest[["0.87"]][2],
+    Fig17.b_MLest[["0.99"]][2],
+    Fig17.b_MLest[["1.09"]][2],
+    Fig17.b_MLest[["1.18"]][2]
+  ),
+  se.sigma = c(
+    Fig17.b_MLest[["0.87"]][5],
+    Fig17.b_MLest[["0.99"]][5],
+    Fig17.b_MLest[["1.09"]][5],
+    Fig17.b_MLest[["1.18"]][5]
+  )
+)
 
-```{r include=FALSE}
+#knitr::kable(Fig4.paras, "latex")
+
+rownames(Fig4.paras) <- c("0.87 Mpsi", "0.99 Mpsi", "1.09 Mpsi", "1.18 Mpsi")
+colnames(Fig4.paras) <- c("$\\hat{\\mu}$","$\\mathrm SE_{\\hat{\\mu}}$","$\\hat{\\sigma}$","$\\mathrm SE_{\\hat{\\sigma}}$")
+
+SepDists_LL <- round(Fig17.b_MLest[["0.87"]][3] + Fig17.b_MLest[["0.99"]][3] + Fig17.b_MLest[["1.09"]][3] + Fig17.b_MLest[["1.18"]][3],3)
+```
+
+
+```{r ML Table 2, echo=FALSE, tab.cap="Table 2. Maximum Likelihood estimates of separate distributions"}
+knitr::kable(Fig4.paras, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+
+
+#, caption = "Table 2. Maximum Likelihood estimates"
+```
+
+The log likelihood of the separate distributions is `r SepDists_LL` with 8 parameters.
+
+Plotting all the stress levels on the same plot helps in assessing the commonly used assumption that the Weibull shape parameter $\sigma$ is constant across all stress levels. This is because the slope of the ML fit line is related to the shape parameter $\sigma$. The slopes of the lines in Fig.4 do look similar for the stress levels 0.99 Mpsi, 1.09 Mpsi and 1.18 Mpsi, but do look *slightly* different for the stress level 0.87 Mpsi. This is also evident in Table 2, where the $\hat{\sigma}$ for 0.87 Mpsi stress is different as compared to the $\hat{\sigma}$ at other levels of stress. But are these differences due to random variation or are they practically significant? I think it is difficult to answer this question, especially if one doesn't have a lot of experience analyzing fatigue-stress data. Nevertheless, we will try to answer this question through a likelihood ratio test, comparing the model with separate distributions and a model where the shape parameter is constrained to be equal across all levels of stress.
+
+```{r EqualSig Model, include=FALSE}
 para_fit_weibull.Factor <- survival::survreg(Surv(Revolutions, delta) ~ factor(Stress, levels = uniqueStress), data = ceramic, dist = "weibull")
 
 summary(para_fit_weibull.Factor)
 
 mu.0.87.Fig17.10c <- para_fit_weibull.Factor[["coefficients"]][1] #baseline/intercept
 
+se.mu.0.87.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][1,1])
+
 mu.0.99.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][2] #Because mu.270.Fig17.7c is the intercept i.e baseline
+
+se.mu.0.99.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][1,1] + para_fit_weibull.Factor[["var"]][2,2] + (2*para_fit_weibull.Factor[["var"]][1,2])) #Var(beta.0 + beta.1) = Var(beta.0) + Var(beta.1) + 2*Covar(beta.0. beta.1)
 
 mu.1.09.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][3] #Because mu.270.Fig17.7c is the intercept i.e baseline
 
+se.mu.1.09.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][1,1] + para_fit_weibull.Factor[["var"]][3,3] + (2*para_fit_weibull.Factor[["var"]][1,3])) #Var(beta.0 + beta.1) = Var(beta.0) + Var(beta.1) + 2*Covar(beta.0. beta.1)
+
 mu.1.18.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][4] #Because mu.270.Fig17.7c is the intercept i.e baseline
 
+se.mu.1.18.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][1,1] + para_fit_weibull.Factor[["var"]][4,4] + (2*para_fit_weibull.Factor[["var"]][1,4])) #Var(beta.0 + beta.1) = Var(beta.0) + Var(beta.1) + 2*Covar(beta.0. beta.1)
+
 sigma.Fig17.10c <- para_fit_weibull.Factor[["scale"]]
+
+se.sigma.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][4,4] * (para_fit_weibull.Factor[["scale"]]**2))
 ```
 
 
@@ -347,34 +416,70 @@ ggplot() + geom_point(
 
 ```
 
-From the plot the ML lines look like a good fit to the non-parametric CDF estimates for all stress levels except the 0.87 Mpsi stress level. Table 2 below shows the log likelihoods and the number of parameters for the separate ML fits for each level of stress (Figure 4) and the model with the shape parameter constrained across all levels of stress (Figure 5). 
+Fig.5 above shows a Weibull plot where the shape parameter is constrained to be equal across all levels of stress.
 
-```{r Log Likelihood}
-SepDists_LL <- Fig17.b_MLest[["0.87"]][3] + Fig17.b_MLest[["0.99"]][3] + Fig17.b_MLest[["1.09"]][3] + Fig17.b_MLest[["1.18"]][3]
+Even with the applied constraint, the ML lines in Fig.6 look like a decent fit to the non-parametric CDF estimates for all stress levels (except maybe the 0.87 Mpsi stress level). Table 3 shows the maximum likelihood estimates of the constrained model. 
 
-EqualSig_LL <- para_fit_weibull.Factor[["loglik"]][2]
+```{r Prep ML table 3, include=FALSE}
+Fig5.paras <- data.frame(
+  mu = c(
+    mu.0.87.Fig17.10c,
+    mu.0.99.Fig17.10c,
+    mu.1.09.Fig17.10c,
+    mu.1.18.Fig17.10c
+  ),
+  se.mu = c(
+    se.mu.0.87.Fig17.10c,
+    se.mu.0.99.Fig17.10c,
+    se.mu.1.09.Fig17.10c,
+    se.mu.1.18.Fig17.10c
+  ),
+  sigma = rep(sigma.Fig17.10c,4),
+  se.sigma = rep(se.sigma.Fig17.10c,4)
+)
 
+#knitr::kable(Fig4.paras, "latex")
 
+rownames(Fig5.paras) <- c("0.87 Mpsi", "0.99 Mpsi", "1.09 Mpsi", "1.18 Mpsi")
+colnames(Fig5.paras) <- c("$\\hat{\\mu}$","$\\mathrm SE_{\\hat{\\mu}}$","$\\hat{\\sigma}$","$\\mathrm SE_{\\hat{\\sigma}}$")
 
-chisq <- 2*(SepDists_LL - EqualSig_LL)
-1-(pchisq(chisq,3))
-
-
-(-2)*(1777-1765)
-1-pchisq(-24,4)
-
+EqualSig_LL <- round(para_fit_weibull.Factor[["loglik"]][2],3)
 ```
 
 
+```{r ML Table 3, echo=FALSE, tab.cap="Table 3. Maximum Likelihood estimates of constrained model"}
+knitr::kable(Fig5.paras, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+
+
+#, caption = "Table 2. Maximum Likelihood estimates"
+```
+
+The log likelihood of the constrained model is `r EqualSig_LL` with 5 parameters.
+
+Conducting a likelihood ratio test will help determine whether the model with separate distributions for each level of stress, which contains 8 parameters (4 $\mu$ and 4 $\sigma$) is statistically different to the model with the shape parameter constrained, which contains only 5 parameters(4 $\mu$ and 1 $\sigma$).
+
+$$
+\chi^{2}_{LR} = 2(LL_{separate} - LL_{constrained}) = 2(-46.6 - (-49.01)) = 4.82
+$$
+The p-value for the LR test with the $\chi^{2}_{LR}$ statistic as shown above and 3 degrees of freedom (8 parameters - 5 parameters) is 0.185. We can conclude that there is no evidence that both models are different at the 5% significance level. Hence, we proceed with the assumption that the $\sigma$ is the same at all levels of stress.
 
 # Weibull Regression
 
+The Weibull regression model we consider is of the form:
 
+$$
+\begin{equation}
+F(t;\beta_{0},\beta_{1},\sigma) = Pr(T\le t) = \Phi \left[\frac{log(t)-(\beta_{0}+\beta_{1}log(stress))}{\sigma}\right]
+\tag{Eq. B}
+\end{equation}
+$$
+where $\sigma$ is constant across all stress levels and $\Phi$ is the standard smallest extreme value distribution. It makes sense to take the log transformation of the stress variable because Fig.2 shows a somewhat linear relationship between logarithm of revolutions and logarithm of stress.
 
 
 ROUGH
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 #Log normal plot 17.7 a
 cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
 ggplot() + geom_point(
