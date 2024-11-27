@@ -1,0 +1,420 @@
+---
+title: "Parametric Regression Modeling of Failure Time data"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Application using R" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+
+```{r Load Libraries, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+library(survival)
+library(tidyverse)
+library(readr)
+library(survminer)
+library(kableExtra)
+library(flexsurv)
+library(gridExtra)
+
+setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 5")
+```
+
+# Introduction
+
+The four previous articles that I wrote were based on non-parametric methods in survival analysis. This is mainly because the book^[Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger)] I referred to was based on applications in medicine, where the aim of the analysis is mostly (although not exclusively) inference rather than prediction, and non-parametric and semi-parametric methods lend themselves well to such applications. Since my main interest lies in applications in reliability, the ability to make predictions is important and parametric methods are useful in such cases. 
+
+The following article demonstrates the application of parametric regression modeling to data from a life test of ceramic ball bearings and is from a paper by McCool (1980)^[McCool, J. I. (1980). Confidence limits for Weibull regression with censored data. *IEEE Transactions on Reliability 29*, 145–150.]. The methods that I employ in this analysis are from  another excellent book^[Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] that I have been referring to recently. The data set also appears as an exercise problem in this book and the authors have made it publicly available on DataShare, Iowa State University's open data repository which can be accessed through [**this link**](https://iastate.figshare.com/articles/dataset/Reliability_Data_Laboratory_Failure-Time_and_Single-Time_Strength_Data/14454753?backTo=%2Fcollections%2FData_Sets_Used_in_Statistical_Methods_for_Reliability_Data_Second_Edition_%2F5395665&file=28330266). 
+
+The R statistical programming language is used for all computations and plots below. Unlike my previous articles, I have not shown the R code within the article, but they are available on my Github page and can be accessed here. The code for some of the plots are a bit lengthy and I wanted to avoid code chunks taking up a lot of space on this page. 
+
+# Exploratory Analysis
+
+Ten specimens were tested at each of the four levels of stress, as shown in the table below.
+
+```{r Load Table, echo=FALSE, tab.cap="Table 1. Ceramic Bearings Life Test Data"}
+ceramic <- read_csv("Data/CeramicBearing02.csv", show_col_types = FALSE)
+
+knitr::kable(ceramic, align = rep('c', 5), table.envir = 'table*') %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+kableExtra::scroll_box(height = "200px")
+
+#, caption = "Table 1. Ceramic Bearings Life Test Data"
+```
+
+
+```{r Rename Columns, include=FALSE}
+ceramic <- ceramic %>%
+  dplyr::rename(Revolutions = `Millions of Revolutions`,
+                Stress = `Stress (Mpsi)`) %>%
+  dplyr::mutate(delta = rep(1,nrow(ceramic))) #No censored observations
+```
+
+The plot of revolutions vs stress on linear axes and on log-log axes are shown below. The plot on the log-log axes suggests a linear relationship between log revolutions and log stress. Hence, we will continue with the log transformation of the variables in our analysis.
+
+```{r NA, eval=FALSE, include=FALSE}
+p1 <- ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + ggtitle("Linerar axes")
+
+p2 <- ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + coord_trans(x = 'log', y = 'log') + ggtitle("Log-Log axes")
+
+p1
+p2
+
+#gridExtra::grid.arrange(p1,p2, ncol = 1)
+```
+
+```{r Linear axes, echo=FALSE, fig.cap="Figure 1: Plot of Millions of Revolutions vs Stress (Mpsi) on linear axes.", cache=TRUE}
+
+ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + ggtitle("Linear axes")
+
+```
+
+```{r Log-log axes, echo=FALSE, fig.cap="Figure 2: Plot of Millions of Revolutions vs Stress (Mpsi) on log-log axes.", cache=TRUE}
+
+ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + coord_trans(x = 'log', y = 'log') + ggtitle("Log-Log axes")
+
+```
+
+# Probability Plots
+
+The log location scale distribution model is given by the following
+
+$$
+\begin{equation}
+F(t;\mu,\sigma) = Pr(T\le t) = \Phi \left[\frac{log(t)-\mu}{\sigma}\right]
+\tag{Eq. A}
+\end{equation}
+$$
+The distribution of $\Phi$ determines the time-to-failure distribution. For example, if $t$ is assumed to have a Weibull distribution, $\Phi$ is the cumulative distribution function (CDF) of the standard smallest extreme value (SEV) distribution. Similarly, if $t$ is assumed to have a log-normal distribution, then $\Phi$ is the CDF of the standard normal distribution.
+
+The log-normal and Weibull distributions are widely used in describing time-to-failure distributions in reliability applications. The Weibull distribution offers flexibility by allowing the modeling of different shapes of the failure rate (increasing, decreasing or constant) while log-normal distribution has shown to be a good distribution to describe those failures that are of a fatigue-stress nature. We will consider these two distributions in this application.
+
+Probability plots for each level of stress are plotted on two different graphs below. The first graph is a log-normal probability plot and the second graph is a Weibull probability plot. 
+
+```{r CDF & ML fits SepDists, include=FALSE}
+#Fig 17.7 a and b equivalent for ceramic data
+
+##I need the Kaplan Meir estimates of the CDF for each level of stress. Instead of coding 4 separate times for 4 stress levels, I am going to loop it.
+
+uniqueStress <- sort(unique(ceramic$Stress))
+Fig17_CDF <- list() #Non parametric CDF estimates for all plots in Fig 17
+Fig17.a_MLest <- list() #Maximum likelihood estimates of plot (a) i.e lognormal
+Fig17.b_MLest <- list() #Maximum likelihood estimates of plot (b) i.e weibull
+i <- 1
+while(i <= length(uniqueStress)){
+  df <- ceramic %>%
+    dplyr::filter(Stress == uniqueStress[i])
+  
+  fit_df <- survival::survfit(Surv(Revolutions, delta) ~ 1, data = df)
+  
+  temp_df <- data.frame(Revolutions = fit_df$time,
+                        p = 1-fit_df$surv)
+  
+  temp_df <- temp_df %>%
+      dplyr::mutate(bottomOfStairs = c(0,head(p,-1))) %>%
+      dplyr::mutate(middleOfStairs = (p + bottomOfStairs)/2) %>% #Note: p is top of stairs.
+      dplyr::select(!p) %>%
+      dplyr::rename(p = middleOfStairs) #This piece of code is for plotting the CDF at the mid point of the jumps instead of plotting at the top of the jumps. See Section 6.4.2 of Chapter 6 in SMRD2.
+  
+  Fig17_CDF[[i]] <- temp_df
+  
+  para_fit_logNormal <- survival::survreg(Surv(Revolutions, delta) ~ 1, data = df, dist = "lognormal")
+  
+  Fig17.a_MLest[[i]] <- c(para_fit_logNormal[["coefficients"]], para_fit_logNormal[["scale"]],para_fit_logNormal[["loglik"]][2]) 
+  
+  para_fit_weibull <- survival::survreg(Surv(Revolutions, delta) ~ 1, data = df, dist = "weibull")
+  
+  Fig17.b_MLest[[i]] <- c(para_fit_weibull[["coefficients"]], para_fit_weibull[["scale"]],para_fit_weibull[["loglik"]][2])
+  
+  i = i + 1
+   
+}
+
+names(Fig17_CDF) <- uniqueStress
+names(Fig17.a_MLest) <- uniqueStress
+names(Fig17.b_MLest) <- uniqueStress
+
+#In order to linearize a log-normal distribution, log(t.p) vs phi inverse(p) plots as a straight line. See Section 6.2.3 in SMRD2. We will now code the 2 transformers for X and Y axes for log-normal
+
+xTransformer.logNormal <- scales::trans_new(
+  name = "logNormal.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.logNormal <- scales::trans_new(
+  name = "logNormal.y.transform",
+  transform = function(p){
+    y = qnorm(p)
+    return(y)
+  },
+  inverse = function(y) {
+    p = pnorm(y)
+    return(p)
+  }
+)
+
+#In order to linearize a weibull distribution, log(t.p) vs log[-log(1-p)] plots as a straight line. See Section 6.2.4 in SMRD2. We will now code the 2 transformers for X and Y axes for weibull
+
+xTransformer.weibull <- scales::trans_new(
+  name = "weibull.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.weibull <- scales::trans_new(
+  name = "weibull.y.transform",
+  transform = function(p){
+    y = log(-log(1-p))
+    return(y)
+  },
+  inverse = function(y) {
+    p = 1 - exp(-exp(y))
+    return(p)
+  }
+)
+```
+
+
+```{r Log-normal, echo=FALSE, fig.cap="Figure 3: Log-normal plot", cache=TRUE}
+#Log normal plot 17.7 a
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.logNormal,
+  name = "Millions of Revolutions",
+  breaks = c(10, 100, 1000, 10000, 100000)
+) + scale_y_continuous(
+  transform = yTransfomer.logNormal,
+  name = "Fraction Failing",
+  breaks = seq(0.00,1.0,0.05)
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["0.87"]][1]/Fig17.a_MLest[["0.87"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["0.87"]][2], color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["0.99"]][1]/Fig17.a_MLest[["0.99"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["0.99"]][2], color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["1.09"]][1]/Fig17.a_MLest[["1.09"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["1.09"]][2], color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["1.18"]][1]/Fig17.a_MLest[["1.18"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["1.18"]][2], color = "1.18 Mpsi")
+) + ggtitle(label = "Log-Normal") + scale_color_manual(name="Stress",values = cols)
+```
+
+
+```{r Weibull plot, echo=FALSE, fig.cap="Figure 4: Weibull plot", cache=TRUE}
+#Weibull plot 17.7 b
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Millions of Revolutions",
+  breaks = c(10, 100, 1000, 10000, 100000)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = seq(0.00,1.00,0.05)
+) + geom_abline(
+  aes(intercept = (-Fig17.b_MLest[["0.87"]][1]/Fig17.b_MLest[["0.87"]][2]), #y-axis intercept
+      slope = 1/Fig17.b_MLest[["0.87"]][2], color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.b_MLest[["0.99"]][1]/Fig17.b_MLest[["0.99"]][2]), #y-axis intercept
+      slope = 1/Fig17.b_MLest[["0.99"]][2], color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.b_MLest[["1.09"]][1]/Fig17.b_MLest[["1.09"]][2]), #y-axis intercept
+      slope = 1/Fig17.b_MLest[["1.09"]][2], color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.b_MLest[["1.18"]][1]/Fig17.b_MLest[["1.18"]][2]), #y-axis intercept
+      slope = 1/Fig17.b_MLest[["1.18"]][2], color = "1.18 Mpsi")
+) + ggtitle(label = "Weibull") + scale_color_manual(name="Stress",values = cols)
+```
+
+The points on the plot are the CDF (cumulative distribution function) estimates^[The points are plotted at the mid-point of the jump where the CDF increases on a Kaplan Meir curve. This plotting position is useful when assessing an ML fit (lines on the plot) graphically and to compare with the non-parametric estimates (points on the plot).] and the lines are based on the ML (maximum likelihood) estimates of the respective distribution parameters.
+
+Looking at both plots in Fig.4 and Fig.5, there is nothing to suggest that either plot deviates too much from the assumed distributions. In fact, in many applications, several parametric models may provide reasonable fits to the data^[Mentioned in Chapter 12 of the aforementioned book by John P. Klein and Melvin L. Moescheberger]. We are mainly looking for any indication that a particular distribution is *definitely* not a good fit, rather than *proving* that a the data fits a particular distribution. The paper by McCool uses a Weibull distribution to model this data. We will continue with the same distribution and revisit this  assumption when we check the residuals from the regression model. 
+
+Plotting all the stress levels on the same plot helps in assessing the commonly used assumption that the Weibull shape parameter $\sigma$ is constant across all the stress levels. This is because the slope of the ML fit is related to the shape parameter $\sigma$. The slopes of the lines in Fig.4 do look different, especially the ML line for a stress value of 0.87 Mpsi, but are these differences due to random variation or are they practically significant? I don't think there is any easy way to answer this question, especially for someone who is new to this kind of analysis. This is where I feel that the experience of working on many fatigue-stress kind of applications will help. Nevertheless, we will try to answer this question through a likelihood ratio test, comparing the model with separate distributions and a model where the shape parameter is constrained to be equal across all values of stress.
+
+Fig.6 below shows another Weibull plot with the shape parameter constrained across all levels of stress. 
+
+```{r include=FALSE}
+para_fit_weibull.Factor <- survival::survreg(Surv(Revolutions, delta) ~ factor(Stress, levels = uniqueStress), data = ceramic, dist = "weibull")
+
+summary(para_fit_weibull.Factor)
+
+mu.0.87.Fig17.10c <- para_fit_weibull.Factor[["coefficients"]][1] #baseline/intercept
+
+mu.0.99.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][2] #Because mu.270.Fig17.7c is the intercept i.e baseline
+
+mu.1.09.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][3] #Because mu.270.Fig17.7c is the intercept i.e baseline
+
+mu.1.18.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][4] #Because mu.270.Fig17.7c is the intercept i.e baseline
+
+sigma.Fig17.10c <- para_fit_weibull.Factor[["scale"]]
+```
+
+
+```{r Weibull plot EqualSig, echo=FALSE, fig.cap="Figure 5: Weibull plot with the shape parameter constrained to be equal across all stress levels", cache=TRUE}
+#Weibull plot 17.10 a
+
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Hours",
+  breaks = c(10,50,100,250,500, 1000,1100)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = seq(0.00,0.99,0.05)
+) + geom_abline(
+  aes(intercept = (-mu.0.87.Fig17.10c/sigma.Fig17.10c), #y-axis intercept
+      slope = 1/sigma.Fig17.10c, color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.0.99.Fig17.10c/sigma.Fig17.10c), #y-axis intercept
+      slope = 1/sigma.Fig17.10c, color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.1.09.Fig17.10c/sigma.Fig17.10c), #y-axis intercept
+      slope = 1/sigma.Fig17.10c, color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.1.18.Fig17.10c/sigma.Fig17.10c), #y-axis intercept
+      slope = 1/sigma.Fig17.10c, color = "1.18 Mpsi")
+) + ggtitle(label = "Weibull EqualSig") + scale_color_manual(name="Stress",values = cols)
+
+
+```
+
+From the plot the ML lines look like a good fit to the non-parametric CDF estimates for all stress levels except the 0.87 Mpsi stress level. Table 2 below shows the log likelihoods and the number of parameters for the separate ML fits for each level of stress (Figure 4) and the model with the shape parameter constrained across all levels of stress (Figure 5). 
+
+```{r Log Likelihood}
+SepDists_LL <- Fig17.b_MLest[["0.87"]][3] + Fig17.b_MLest[["0.99"]][3] + Fig17.b_MLest[["1.09"]][3] + Fig17.b_MLest[["1.18"]][3]
+
+EqualSig_LL <- para_fit_weibull.Factor[["loglik"]][2]
+
+
+
+chisq <- 2*(SepDists_LL - EqualSig_LL)
+1-(pchisq(chisq,3))
+
+
+(-2)*(1777-1765)
+1-pchisq(-24,4)
+
+```
+
+
+
+# Weibull Regression
+
+
+
+
+ROUGH
+
+```{r}
+#Log normal plot 17.7 a
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.logNormal,
+  name = "Millions of Revolutions",
+  breaks = c(10, 100, 1000, 10000, 100000)
+) + scale_y_continuous(
+  transform = yTransfomer.logNormal,
+  name = "Fraction Failing",
+  breaks = seq(0.00,1.0,0.05)
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["0.87"]][1]/Fig17.a_MLest[["0.87"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["0.87"]][2], color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["0.99"]][1]/Fig17.a_MLest[["0.99"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["0.99"]][2], color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["1.09"]][1]/Fig17.a_MLest[["1.09"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["1.09"]][2], color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["1.18"]][1]/Fig17.a_MLest[["1.18"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["1.18"]][2], color = "1.18 Mpsi")
+) + ggtitle(label = "Log-Normal") + scale_color_manual(name="Stress",values = cols)
+```
+
+
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
