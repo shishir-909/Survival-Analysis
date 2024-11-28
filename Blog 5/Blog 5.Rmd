@@ -1,7 +1,7 @@
 ---
 title: "Parametric Modeling of Failure Time data"
 runningheader: "Tufte Handout with R Markdown" # only for pdf output
-subtitle: "Application using the R Statistical Software" # only for html output
+subtitle: "Application using R Statistical Software" # only for html output
 author: "Shishir Rao"
 date: "`r Sys.Date()`"
 output:
