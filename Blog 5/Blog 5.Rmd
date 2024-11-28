@@ -738,8 +738,11 @@ weibullPlot.model1$p.upper[c(1)] <- weibullPlot.model1$p.upper[2]
 
 
 
-```{r Std Resid Weibull plot, fig.cap="Figure 8: Weibull Probability Plot of Standardized Residuals", cache=TRUE, include=FALSE}
-ggplot(weibullPlot.model1, aes(x = t.p, y = p)) + geom_point() + geom_step(aes(y = p.lower)) + geom_step(aes(y = p.upper)) + scale_x_continuous(transform = xTransformer, name = "Standardized Residuals", breaks = c(0.001,0.01, 0.1, 1,2,3)) + scale_y_continuous(transform = yTransfomer, name = "Fraction Failing",breaks = seq(0.01,0.99,0.1))
+```{r Std Resid Weibull plot, echo=FALSE, fig.cap="Figure 8: Weibull Probability Plot of Standardized Residuals", cache=TRUE}
+std.resid.prob.plot <- ggplot(weibullPlot.model1, aes(x = t.p, y = p)) + geom_point() + geom_step(aes(y = p.lower)) + geom_step(aes(y = p.upper)) + scale_x_continuous(transform = xTransformer, name = "Standardized Residuals", breaks = c(0.001,0.01, 0.1, 1,2,3)) + scale_y_continuous(transform = yTransfomer, name = "Fraction Failing",breaks = seq(0.01,0.99,0.1))
+
+R <- suppressWarnings(print(std.resid.prob.plot))
+
 ```
 
 # Conclusion
