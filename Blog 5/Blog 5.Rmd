@@ -1,0 +1,850 @@
+---
+title: "Parametric Modeling of Failure Time data"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Application using the R Statistical Software" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+
+```{r Load Libraries, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+library(survival)
+library(tidyverse)
+library(readr)
+library(survminer)
+library(kableExtra)
+library(flexsurv)
+library(gridExtra)
+library(km.ci)
+
+setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 5")
+```
+
+# Introduction
+
+The four previous articles that I wrote were based on non-parametric methods in survival analysis. This is mainly because the book^[Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger)] I referred to was based on applications in medicine, where the aim of the analysis is mostly (although not exclusively) inference rather than prediction, and non-parametric and semi-parametric methods lend themselves well to such applications. Since my main interest lies in applications in reliability, the ability to make predictions is important and parametric methods are useful in such cases. 
+
+The following article demonstrates the application of parametric regression modeling to data from a life test of ceramic ball bearings and is from a paper by McCool (1980)^[McCool, J. I. (1980). Confidence limits for Weibull regression with censored data. *IEEE Transactions on Reliability 29*, 145–150.]. The methods that I employ in this analysis are from  another excellent book^[Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] that I have been referring to recently and came across the ceramic data set in the same book. The data set is also publicly available on DataShare, Iowa State University's open data repository which can be accessed through [**this link**](https://iastate.figshare.com/articles/dataset/Reliability_Data_Laboratory_Failure-Time_and_Single-Time_Strength_Data/14454753?backTo=%2Fcollections%2FData_Sets_Used_in_Statistical_Methods_for_Reliability_Data_Second_Edition_%2F5395665&file=28330266). 
+
+The R statistical programming language is used for all computations and plots below. Unlike my previous articles, I have not included any R code within the article, but they are available on my Github page and can be accessed here. The code for some of the plots are lengthy and I wanted to avoid code chunks taking up space on this page. 
+
+# Exploratory Analysis
+
+Ten specimens were tested at each of the four levels of stress, as shown in table 1 below. The time-to-failure is recorded in terms of "Millions of Revolutions".
+
+```{r Load Table, echo=FALSE, tab.cap="Table 1. Ceramic Bearings Life Test Data"}
+ceramic <- read_csv("Data/CeramicBearing02.csv", show_col_types = FALSE)
+
+knitr::kable(ceramic, align = rep('c', 5), table.envir = 'table*') %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+kableExtra::scroll_box(height = "200px")
+
+#, caption = "Table 1. Ceramic Bearings Life Test Data"
+```
+
+
+```{r Rename Columns, include=FALSE}
+ceramic <- ceramic %>%
+  dplyr::rename(Revolutions = `Millions of Revolutions`,
+                Stress = `Stress (Mpsi)`) %>%
+  dplyr::mutate(delta = rep(1,nrow(ceramic))) #No censored observations
+```
+
+The plot of revolutions vs stress on linear axes and on log-log axes are shown in Fig.1 and Fig.2 below. The plot on the log-log axes suggests a linear relationship between log revolutions and log stress. Hence, we will consider the log transformation later in the article in the regression model. 
+
+```{r NA, eval=FALSE, include=FALSE}
+p1 <- ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + ggtitle("Linerar axes")
+
+p2 <- ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + coord_trans(x = 'log', y = 'log') + ggtitle("Log-Log axes")
+
+p1
+p2
+
+#gridExtra::grid.arrange(p1,p2, ncol = 1)
+```
+
+```{r Linear axes, echo=FALSE, fig.cap="Figure 1: Plot of Millions of Revolutions vs Stress (Mpsi) on linear axes.", cache=TRUE}
+
+ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + ggtitle("Linear axes")
+
+```
+
+```{r Log-log axes, echo=FALSE, fig.cap="Figure 2: Plot of Millions of Revolutions vs Stress (Mpsi) on log-log axes.", cache=TRUE}
+
+ggplot(ceramic, aes(x = Stress, y = Revolutions)) + geom_point() + ylab("Millions of Revolutions") + xlab("Stress (Mpsi)") + coord_trans(x = 'log', y = 'log') + ggtitle("Log-Log axes")
+
+```
+
+Notice the outlier data point at stress 1.09 Mpsi in Fig.2. When we notice such outliers, it is worth digging deeper into the test that resulted in this value and making sure that this is indeed a valid data point.
+
+# Probability Plots
+
+The log location scale distribution model is shown in Eq. A below.
+
+$$
+\hspace{-2cm} 
+\begin{align*}
+F(t;\mu,\sigma) & = Pr(T\le t)\\ & = \Phi \left[\frac{log(t)-\mu}{\sigma}\right]
+\tag{Eq. A}
+\end{align*}
+$$
+The distribution of $\Phi$ determines the time-to-failure distribution. For example, if $t$ is assumed to have a Weibull distribution, $\Phi$ is the cumulative distribution function (CDF) of the standard smallest extreme value (SEV) distribution. Similarly, if $t$ is assumed to have a log-normal distribution, then $\Phi$ is the CDF of the standard normal distribution.
+
+The log-normal and Weibull distributions are widely used in describing time-to-failure distributions in reliability applications. Weibull distribution offers flexibility by allowing the modeling of different shapes of the failure rate (increasing, decreasing or constant) while log-normal distribution has shown to be a good distribution to describe those failures that are of a fatigue-stress nature.
+
+Probability plots for each level of stress are plotted on two different graphs below. Fig.4 shows a log-normal probability plot and Fig.5 shows a Weibull probability plot. 
+
+```{r CDF & ML fits SepDists, include=FALSE}
+#Fig 17.7 a and b equivalent for ceramic data
+
+##I need the Kaplan Meir estimates of the CDF for each level of stress. Instead of coding 4 separate times for 4 stress levels, I am going to loop it.
+
+uniqueStress <- sort(unique(ceramic$Stress))
+Fig17_CDF <- list() #Non parametric CDF estimates for all plots in Fig 17
+Fig17.a_MLest <- list() #Maximum likelihood estimates of plot (a) i.e lognormal
+Fig17.b_MLest <- list() #Maximum likelihood estimates of plot (b) i.e weibull
+i <- 1
+while(i <= length(uniqueStress)){
+  df <- ceramic %>%
+    dplyr::filter(Stress == uniqueStress[i])
+  
+  fit_df <- survival::survfit(Surv(Revolutions, delta) ~ 1, data = df)
+  
+  temp_df <- data.frame(Revolutions = fit_df$time,
+                        p = 1-fit_df$surv)
+  
+  temp_df <- temp_df %>%
+      dplyr::mutate(bottomOfStairs = c(0,head(p,-1))) %>%
+      dplyr::mutate(middleOfStairs = (p + bottomOfStairs)/2) %>% #Note: p is top of stairs.
+      dplyr::select(!p) %>%
+      dplyr::rename(p = middleOfStairs) #This piece of code is for plotting the CDF at the mid point of the jumps instead of plotting at the top of the jumps. See Section 6.4.2 of Chapter 6 in SMRD2.
+  
+  Fig17_CDF[[i]] <- temp_df
+  
+  para_fit_logNormal <- survival::survreg(Surv(Revolutions, delta) ~ 1, data = df, dist = "lognormal")
+  
+  Fig17.a_MLest[[i]] <- c(
+    para_fit_logNormal[["coefficients"]], #mu
+    para_fit_logNormal[["scale"]], #sigma
+    para_fit_logNormal[["loglik"]][2], #log likelihood
+    sqrt(para_fit_logNormal[["var"]][1, 1]), #s.e of mu
+    (para_fit_logNormal[["scale"]] * sqrt(para_fit_logNormal[["var"]][2, 2])) #s.e of scale
+  ) 
+  
+  para_fit_weibull <- survival::survreg(Surv(Revolutions, delta) ~ 1, data = df, dist = "weibull")
+  
+  Fig17.b_MLest[[i]] <- c(
+    para_fit_weibull[["coefficients"]], #mu
+    para_fit_weibull[["scale"]], #sigma
+    para_fit_weibull[["loglik"]][2], #log-likelihood
+    sqrt(para_fit_weibull[["var"]][1, 1]), #s.e of mu
+    (para_fit_weibull[["scale"]] * sqrt(para_fit_weibull[["var"]][2, 2])) #s.e of sigma
+  )
+  
+  i = i + 1
+   
+}
+
+names(Fig17_CDF) <- uniqueStress
+names(Fig17.a_MLest) <- uniqueStress
+names(Fig17.b_MLest) <- uniqueStress
+
+#In order to linearize a log-normal distribution, log(t.p) vs phi inverse(p) plots as a straight line. See Section 6.2.3 in SMRD2. We will now code the 2 transformers for X and Y axes for log-normal
+
+xTransformer.logNormal <- scales::trans_new(
+  name = "logNormal.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.logNormal <- scales::trans_new(
+  name = "logNormal.y.transform",
+  transform = function(p){
+    y = qnorm(p)
+    return(y)
+  },
+  inverse = function(y) {
+    p = pnorm(y)
+    return(p)
+  }
+)
+
+#In order to linearize a weibull distribution, log(t.p) vs log[-log(1-p)] plots as a straight line. See Section 6.2.4 in SMRD2. We will now code the 2 transformers for X and Y axes for weibull
+
+xTransformer.weibull <- scales::trans_new(
+  name = "weibull.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.weibull <- scales::trans_new(
+  name = "weibull.y.transform",
+  transform = function(p){
+    y = log(-log(1-p))
+    return(y)
+  },
+  inverse = function(y) {
+    p = 1 - exp(-exp(y))
+    return(p)
+  }
+)
+```
+
+
+```{r Log-normal, echo=FALSE, fig.cap="Figure 3: Log-normal plot", cache=TRUE}
+#Log normal plot 17.7 a
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.logNormal,
+  name = "Millions of Revolutions",
+  breaks = c(10, 100, 1000, 10000, 100000)
+) + scale_y_continuous(
+  transform = yTransfomer.logNormal,
+  name = "Fraction Failing",
+  breaks = seq(0.00,1.0,0.05)
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["0.87"]][1]/Fig17.a_MLest[["0.87"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["0.87"]][2], color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["0.99"]][1]/Fig17.a_MLest[["0.99"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["0.99"]][2], color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["1.09"]][1]/Fig17.a_MLest[["1.09"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["1.09"]][2], color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["1.18"]][1]/Fig17.a_MLest[["1.18"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["1.18"]][2], color = "1.18 Mpsi")
+) + ggtitle(label = "Log-Normal") + scale_color_manual(name="Stress",values = cols)
+```
+
+
+```{r Weibull plot, echo=FALSE, fig.cap="Figure 4: Weibull plot", cache=TRUE}
+#Weibull plot 17.7 b
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Millions of Revolutions",
+  breaks = c(10, 100, 1000, 10000, 100000)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = seq(0.00,1.00,0.05)
+) + geom_abline(
+  aes(intercept = (-Fig17.b_MLest[["0.87"]][1]/Fig17.b_MLest[["0.87"]][2]), #y-axis intercept
+      slope = 1/Fig17.b_MLest[["0.87"]][2], color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.b_MLest[["0.99"]][1]/Fig17.b_MLest[["0.99"]][2]), #y-axis intercept
+      slope = 1/Fig17.b_MLest[["0.99"]][2], color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.b_MLest[["1.09"]][1]/Fig17.b_MLest[["1.09"]][2]), #y-axis intercept
+      slope = 1/Fig17.b_MLest[["1.09"]][2], color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.b_MLest[["1.18"]][1]/Fig17.b_MLest[["1.18"]][2]), #y-axis intercept
+      slope = 1/Fig17.b_MLest[["1.18"]][2], color = "1.18 Mpsi")
+) + ggtitle(label = "Weibull") + scale_color_manual(name="Stress",values = cols)
+```
+
+The points on the plot are the non-parametric CDF estimates^[The points are plotted at the mid-point of the jump where the CDF increases on a Kaplan Meir curve. This plotting position is useful when assessing an ML fit (lines on the plot) graphically and to compare how well they fit the non-parametric estimates (points on the plot).] and the lines are based on the ML (maximum likelihood) estimates of the respective distribution parameters.
+
+Looking at both plots in Fig.4 and Fig.5, there is nothing to suggest that either plot deviates too much from the assumed distributions. In fact, in many applications, several parametric models may provide reasonable fits to the data^[Mentioned in Chapter 12 of the aforementioned book by John P. Klein and Melvin L. Moescheberger]. We are mainly looking for any indication that a particular distribution is *definitely* not a good fit, rather than *proving* that the data fits a particular distribution. The paper by McCool(1980) uses a Weibull distribution to model this data. We will continue with the same distribution and revisit this  assumption later. 
+
+Notice that the outlier observation at 1.09 Mpsi stress can again be seen in the lower left corner of the log-normal and Weibull probability plots in Fig.3 and Fig.4.
+
+Table 2 shows the ML estimates of the parameters $\mu$ and $\sigma$ when time-to-failure is assumed to be distributed Weibull. These are the paramters used to plot the ML fit lines in Fig.4.
+
+```{r Prep ML table 2, include=FALSE}
+Fig4.paras <- data.frame(
+  mu = c(
+    Fig17.b_MLest[["0.87"]][1],
+    Fig17.b_MLest[["0.99"]][1],
+    Fig17.b_MLest[["1.09"]][1],
+    Fig17.b_MLest[["1.18"]][1]
+  ),
+  se.mu = c(
+    Fig17.b_MLest[["0.87"]][4],
+    Fig17.b_MLest[["0.99"]][4],
+    Fig17.b_MLest[["1.09"]][4],
+    Fig17.b_MLest[["1.18"]][4]
+  ),
+  sigma = c(
+    Fig17.b_MLest[["0.87"]][2],
+    Fig17.b_MLest[["0.99"]][2],
+    Fig17.b_MLest[["1.09"]][2],
+    Fig17.b_MLest[["1.18"]][2]
+  ),
+  se.sigma = c(
+    Fig17.b_MLest[["0.87"]][5],
+    Fig17.b_MLest[["0.99"]][5],
+    Fig17.b_MLest[["1.09"]][5],
+    Fig17.b_MLest[["1.18"]][5]
+  )
+)
+
+#knitr::kable(Fig4.paras, "latex")
+
+rownames(Fig4.paras) <- c("0.87 Mpsi", "0.99 Mpsi", "1.09 Mpsi", "1.18 Mpsi")
+colnames(Fig4.paras) <- c("$\\hat{\\mu}$","$\\mathrm SE_{\\hat{\\mu}}$","$\\hat{\\sigma}$","$\\mathrm SE_{\\hat{\\sigma}}$")
+
+SepDists_LL <- round(Fig17.b_MLest[["0.87"]][3] + Fig17.b_MLest[["0.99"]][3] + Fig17.b_MLest[["1.09"]][3] + Fig17.b_MLest[["1.18"]][3],3)
+```
+
+
+```{r ML Table 2, echo=FALSE, tab.cap="Table 2. Maximum Likelihood estimates of separate distributions"}
+knitr::kable(Fig4.paras, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+
+
+#, caption = "Table 2. Maximum Likelihood estimates"
+```
+
+The log likelihood of the separate distributions is `r SepDists_LL` with 8 parameters.
+
+Plotting all the stress levels on the same plot helps in assessing the commonly used assumption that the Weibull shape parameter $\sigma$ is constant across all stress levels. The slope of the ML fit line is related to the shape parameter $\sigma$. The slopes of the lines in Fig.4 do look approximately similar for the stress levels 0.99 Mpsi, 1.09 Mpsi and 1.18 Mpsi, but is *slightly* different for the stress level 0.87 Mpsi. This is also evident in Table 2, where the $\hat{\sigma}$ for 0.87 Mpsi stress is different as compared to the $\hat{\sigma}$ at other levels of stress. But are these differences practically significant? I think it is difficult to answer this question, especially if one doesn't have a lot of experience analyzing fatigue-stress data. Nevertheless, we will try to answer this question through a likelihood ratio (LR) test now and revisit this assumption later. The LR test compares the model with separate distributions consisting of 8 parameters (4 $\mu$ and 4 $\sigma$) and the model where the shape parameter is constrained to be equal across all levels of stress, consisting of 5 parameters (4 $\mu$ and 1 $\sigma$).
+
+```{r EqualSig Model, include=FALSE}
+para_fit_weibull.Factor <- survival::survreg(Surv(Revolutions, delta) ~ factor(Stress, levels = uniqueStress), data = ceramic, dist = "weibull")
+
+summary(para_fit_weibull.Factor)
+
+mu.0.87.Fig17.10c <- para_fit_weibull.Factor[["coefficients"]][1] #baseline/intercept
+
+se.mu.0.87.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][1,1])
+
+mu.0.99.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][2] #Because mu.270.Fig17.7c is the intercept i.e baseline
+
+se.mu.0.99.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][1,1] + para_fit_weibull.Factor[["var"]][2,2] + (2*para_fit_weibull.Factor[["var"]][1,2])) #Var(beta.0 + beta.1) = Var(beta.0) + Var(beta.1) + 2*Covar(beta.0. beta.1)
+
+mu.1.09.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][3] #Because mu.270.Fig17.7c is the intercept i.e baseline
+
+se.mu.1.09.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][1,1] + para_fit_weibull.Factor[["var"]][3,3] + (2*para_fit_weibull.Factor[["var"]][1,3])) #Var(beta.0 + beta.1) = Var(beta.0) + Var(beta.1) + 2*Covar(beta.0. beta.1)
+
+mu.1.18.Fig17.10c <- mu.0.87.Fig17.10c + para_fit_weibull.Factor[["coefficients"]][4] #Because mu.270.Fig17.7c is the intercept i.e baseline
+
+se.mu.1.18.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][1,1] + para_fit_weibull.Factor[["var"]][4,4] + (2*para_fit_weibull.Factor[["var"]][1,4])) #Var(beta.0 + beta.1) = Var(beta.0) + Var(beta.1) + 2*Covar(beta.0. beta.1)
+
+sigma.Fig17.10c <- para_fit_weibull.Factor[["scale"]]
+
+se.sigma.Fig17.10c <- sqrt(para_fit_weibull.Factor[["var"]][4,4] * (para_fit_weibull.Factor[["scale"]]**2))
+```
+
+
+```{r Weibull plot EqualSig, echo=FALSE, fig.cap="Figure 5: Weibull plot with the shape parameter constrained to be equal across all stress levels", cache=TRUE}
+#Weibull plot 17.10 c
+
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Hours",
+  breaks = c(10,50,100,250,500, 1000,1100)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = seq(0.00,0.99,0.05)
+) + geom_abline(
+  aes(intercept = (-mu.0.87.Fig17.10c/sigma.Fig17.10c), #y-axis intercept
+      slope = 1/sigma.Fig17.10c, color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.0.99.Fig17.10c/sigma.Fig17.10c), #y-axis intercept
+      slope = 1/sigma.Fig17.10c, color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.1.09.Fig17.10c/sigma.Fig17.10c), #y-axis intercept
+      slope = 1/sigma.Fig17.10c, color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.1.18.Fig17.10c/sigma.Fig17.10c), #y-axis intercept
+      slope = 1/sigma.Fig17.10c, color = "1.18 Mpsi")
+) + ggtitle(label = "Weibull EqualSig") + scale_color_manual(name="Stress",values = cols)
+
+
+```
+
+Fig.5 above shows a Weibull plot where the shape parameter is constrained to be equal across all levels of stress, which is why the slopes of the lines are exactly the same.
+
+Even with the applied constraint, the ML lines in Fig.6 look like a *fairly* decent fit to the non-parametric CDF estimates for all stress levels except the 0.87 Mpsi stress level. Table 3 shows the maximum likelihood estimates of the ML lines in the constrained model. 
+
+```{r Prep ML table 3, include=FALSE}
+Fig5.paras <- data.frame(
+  mu = c(
+    mu.0.87.Fig17.10c,
+    mu.0.99.Fig17.10c,
+    mu.1.09.Fig17.10c,
+    mu.1.18.Fig17.10c
+  ),
+  se.mu = c(
+    se.mu.0.87.Fig17.10c,
+    se.mu.0.99.Fig17.10c,
+    se.mu.1.09.Fig17.10c,
+    se.mu.1.18.Fig17.10c
+  ),
+  sigma = rep(sigma.Fig17.10c,4),
+  se.sigma = rep(se.sigma.Fig17.10c,4)
+)
+
+#knitr::kable(Fig4.paras, "latex")
+
+rownames(Fig5.paras) <- c("0.87 Mpsi", "0.99 Mpsi", "1.09 Mpsi", "1.18 Mpsi")
+colnames(Fig5.paras) <- c("$\\hat{\\mu}$","$\\mathrm SE_{\\hat{\\mu}}$","$\\hat{\\sigma}$","$\\mathrm SE_{\\hat{\\sigma}}$")
+
+EqualSig_LL <- round(para_fit_weibull.Factor[["loglik"]][2],3)
+```
+
+
+```{r ML Table 3, echo=FALSE, tab.cap="Table 3. Maximum Likelihood estimates of constrained model"}
+knitr::kable(Fig5.paras, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+
+
+#, caption = "Table 2. Maximum Likelihood estimates"
+```
+
+The log likelihood of the constrained model is `r EqualSig_LL` with 5 parameters.
+
+Conducting a likelihood ratio test will help determine whether the model with separate distributions for each level of stress, which contains 8 parameters (4 $\mu$ and 4 $\sigma$) is statistically different to the model with the shape parameter constrained, which contains only 5 parameters(4 $\mu$ and 1 $\sigma$).
+
+$$
+\begin{align*}
+\hspace{-2cm} 
+\chi^{2}_{LR} &  =  2(LL_{separate} - LL_{constrained})\\ & = 2(-46.6 - (-49.01)) = 4.82
+\end{align*}
+$$
+The p-value for the LR test with the $\chi^{2}_{LR}$ statistic as shown above and 3 degrees of freedom (8 parameters - 5 parameters) is 0.185. There is no evidence that both models are different at the 5% significance level. We will proceed with the assumption that the $\sigma$ is the same at all levels of stress for now and revisit later, if required.
+
+# Weibull Regression
+
+The Weibull regression model we consider is of the form:
+
+$$
+\hspace{-4cm} 
+\begin{align*}
+F(t;\beta_{0},\beta_{1},\sigma) & = Pr(T\le t)\\ 
+& = \Phi\left[\frac{log(t)-(\beta_{0}+\beta_{1}log(stress))}{\sigma}\right]
+\tag{Eq. B}
+\end{align*}
+$$
+where $\sigma$ is constant across all stress levels and $\Phi$ is the standard smallest extreme value distribution. It makes sense to take the log transformation of the stress variable since Fig.2 shows a *somewhat* linear relationship between logarithm of revolutions and logarithm of stress.
+
+```{r Regression model, include=FALSE}
+para_fit_weibull.Fig17.10d <- survival::survreg(Surv(Revolutions, delta) ~ log(Stress), data = ceramic, dist = "weibull")
+
+summary(para_fit_weibull.Fig17.10d)
+
+(-2)*para_fit_weibull.Fig17.10d$loglik[2]
+
+beta.0 <- para_fit_weibull.Fig17.10d[["coefficients"]][1]
+
+se.beta.0 <- sqrt(para_fit_weibull.Fig17.10d[["var"]][1,1])
+
+beta.1 <- para_fit_weibull.Fig17.10d[["coefficients"]][2]
+
+se.beta.1 <- sqrt(para_fit_weibull.Fig17.10d[["var"]][2,2])
+
+sigma.Fig17.10d <- para_fit_weibull.Fig17.10d[["scale"]]
+
+se.sigma.Fig17.10d <- sqrt(para_fit_weibull.Fig17.10d[["var"]][3,3] * (para_fit_weibull.Fig17.10d[["scale"]]**2))
+
+RegrParas <- data.frame(
+  ML_est = c(beta.0, beta.1, sigma.Fig17.10d),
+  Std.Err = c(se.beta.0, se.beta.1, se.sigma.Fig17.10d),
+  Wald_0.95_Lower = c(
+    beta.0 - (qnorm(0.975) * se.beta.0),
+    beta.1 - (qnorm(0.975) * se.beta.1),
+    exp(log(para_fit_weibull.Fig17.10d[["scale"]]) - (
+      qnorm(0.975) * sqrt(para_fit_weibull.Fig17.10d[["var"]][3, 3])
+    ))
+  ),
+  Wald_0.95_Upper = c(
+    beta.0 + (qnorm(0.975) * se.beta.0),
+    beta.1 + (qnorm(0.975) * se.beta.1),
+    exp(log(para_fit_weibull.Fig17.10d[["scale"]]) + (
+      qnorm(0.975) * sqrt(para_fit_weibull.Fig17.10d[["var"]][3, 3])
+    ))
+  )
+  
+)
+
+rownames(RegrParas) <- c("$\\hat{\\beta_{0}}$", "$\\hat{\\beta_{1}}$", "$\\hat{\\sigma}$")
+colnames(RegrParas) <- c("ML estimate","Standard Error","Wald Lower 95% CI","Wald Upper 95% CI")
+
+Regr_LL <- round(para_fit_weibull.Fig17.10d[["loglik"]][2],3)
+
+```
+
+Table 4 shows the ML estimates, standard errors and the Wald 95% confidence intervals of $\beta_{0}$, $\beta_{1}$ and $\sigma$ from the model in Eq.B.
+
+```{r ML Table 4, echo=FALSE, tab.cap="Table 4. Maximum Likelihood estimates of regression model"}
+knitr::kable(RegrParas, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+
+
+#, caption = "Table 2. Maximum Likelihood estimates"
+```
+The log likelihood of this model is `r Regr_LL`. 
+
+Fig.6 shows a Weibull plot of the regression model.
+
+```{r Weibull plot regression parameters, include=FALSE}
+mu.0.87.Fig17.10d <- log(predict(para_fit_weibull.Fig17.10d,
+        newdata = data.frame(Stress = 0.87)))
+
+mu.0.99.Fig17.10d <- log(predict(para_fit_weibull.Fig17.10d,
+        newdata = data.frame(Stress = 0.99)))
+
+mu.1.09.Fig17.10d <- log(predict(para_fit_weibull.Fig17.10d,
+        newdata = data.frame(Stress = 1.09)))
+
+mu.1.18.Fig17.10d <- log(predict(para_fit_weibull.Fig17.10d,
+        newdata = data.frame(Stress = 1.18)))
+
+sigma.Fig17.10d <- para_fit_weibull.Fig17.10d[["scale"]]
+```
+
+
+```{r Weibull plot Regression, echo=FALSE, fig.cap="Figure 6: Weibull plot of the regression model", cache=TRUE}
+#Weibull plot 17.10 d
+
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Hours",
+  breaks = c(10,50,100,250,500, 1000,1100)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = seq(0.00,0.99,0.05)
+) + geom_abline(
+  aes(intercept = (-mu.0.87.Fig17.10d/sigma.Fig17.10d), #y-axis intercept
+      slope = 1/sigma.Fig17.10d, color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.0.99.Fig17.10d/sigma.Fig17.10d), #y-axis intercept
+      slope = 1/sigma.Fig17.10d, color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.1.09.Fig17.10d/sigma.Fig17.10d), #y-axis intercept
+      slope = 1/sigma.Fig17.10d, color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-mu.1.18.Fig17.10d/sigma.Fig17.10d), #y-axis intercept
+      slope = 1/sigma.Fig17.10d, color = "1.18 Mpsi")
+) + ggtitle(label = "Weibull Regression") + scale_color_manual(name="Stress",values = cols)
+
+```
+
+Clearly, a lack of fit is observed in Fig.6, where the ML fit lines do not seem to align very well with the non-parametric estimates denoted by the points, especially at the lower stress levels. Conducting a likelihood ratio (LR) test between the 5 parameter constrained $\sigma$ model and the 3 parameter regression model, we get:
+
+$$
+\begin{align*}
+\hspace{-2cm} 
+\chi^{2}_{LR} &  =  2(LL_{constrained} - LL_{regression})\\ & = 2(-49.01 - (-54.402)) = 10.784
+\end{align*}
+$$
+The p-value for the LR test with the $\chi^{2}_{LR}$ statistic as shown above and 2 degrees of freedom (5 parameters - 3 parameters) is 0.0045. There is evidence of a lack of fit of the regression model in Eq.B. This is in line with our observations in Fig.6^[The paper by McCool(1980) also came to the same conclusion]. 
+
+Potential remedies include considering an alternate distribution (eg: log-normal) or an alternate Box-Cox transformation of the stress variable^[The log transformation of the stress variable considered here corresponds to a Box-Cox transormation parameter $\lambda$ = 0. Alternate transformation involves other values of $\lambda$ that maximizes the likelihood.]. Fig.4 and Table 2 show some evidence to suggest that the slope of 0.87 Mpsi line is different from the other lines. So, one could also consider fitting a model where the $\sigma$ parameter is allowed to vary across the different levels of stress. Such behavior, where the shape parameter of the Weibull distribution increases with stress has been observed in rolling contact fatigue testing^[Mentioned in the paper by McCool(1980)]. Some of these remedies will be discussed in a separate article. We will continue with the existing regression model in this article, but keeping in mind that the results may be biased due to lack of fit. 
+
+The ML estimates of the regression parameters can be used to estimate quantiles of the distribution at different stress levels. Table 5 below shows the 10% and 50% quantiles of the time-to-failure distribution at a stress level of 1.15 MPsi, along with the Wald 95% confidence intervals.
+
+```{r Quantiles Calculation, include=FALSE}
+quantiles_0.1_0.5 <- predict(para_fit_weibull.Fig17.10d,
+        newdata = data.frame(Stress = 1.15), type = 'quantile', p=c(0.1,0.5), se.fit = T) 
+
+lower_wald95 <- exp(log(quantiles_0.1_0.5$fit) - (qnorm(0.975)*quantiles_0.1_0.5$se.fit/quantiles_0.1_0.5$fit))
+
+upper_wald95 <- exp(log(quantiles_0.1_0.5$fit) + (qnorm(0.975)*quantiles_0.1_0.5$se.fit/quantiles_0.1_0.5$fit))
+
+quantile_df <- data.frame(t.p = quantiles_0.1_0.5$fit, t.p.se = quantiles_0.1_0.5$se.fit, wald_lower = lower_wald95,
+                          wald_upper = upper_wald95)
+
+rownames(quantile_df) <- c("$\\hat{t_{0.1}}$","$\\hat{t_{0.5}}$")
+colnames(quantile_df) <- c("ML estimate","Standard Error","Wald Lower 95% CI","Wald Upper 95% CI")
+  
+```
+
+
+```{r ML Table 5, echo=FALSE, tab.cap="Table 5. 10% and 50% quantile at 1.15 Mpsi stress"}
+knitr::kable(quantile_df, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+
+
+#, caption = "Table 2. Maximum Likelihood estimates"
+```
+
+Fig.7 shows a plot of the standardized residuals from the regression model vs fitted values. It is evident from this plot that the spread of the points is not the same for all 4 levels of stress. There is more variability  in the larger fitted values^[Larger fitted values correspond to lower stress levels] as compared to the smaller fitted values. This is additional evidence that a model where the Weibull shape parameter depends on the level of stress is worth considering. The single outlier at the fitted value corresponding to 1.09 Mpsi is again observed at the bottom of the plot in Fig.7.
+
+```{r Std. Residuals vs Fitted Values, include=FALSE}
+#First, add a column for the linear predictors. This is nothing but "mu + gamma.transpose*Z" for every observation.
+
+ceramic <- ceramic %>%
+  dplyr::mutate(LinearPredictor = para_fit_weibull.Fig17.10d[["linear.predictors"]])
+
+#Next, add a column for standardized residuals. The definition of standardized residual for a log-location-scale model is given by Eq 17.12 in SMRD2
+
+ceramic <- ceramic %>% 
+  dplyr::mutate(stdResid = exp((log(Revolutions)-LinearPredictor)/para_fit_weibull.Fig17.10d[["scale"]])) %>%
+  dplyr::mutate(stdResid.round = round(stdResid,3))
+```
+
+
+```{r Std Resid vs fitted, echo=FALSE, fig.cap="Figure 7: Standardized Residuals vs Fitted Values", cache=TRUE}
+
+ggplot(ceramic, aes(x = exp(LinearPredictor), y = stdResid, group = delta)) + geom_point() + coord_trans(x = 'log', y = 'log') + ylab("Standardized Residuals") + xlab("Fitted Values") #Matches figure 17.5a! Notice that the variability is higher at larger fitted values.
+
+
+#+ geom_point(aes(shape = factor(delta, levels = c(1,0))))
+```
+
+Fig. 8 shows a Weibull plot of the standardized residuals along with the 95% confidence bands. The outlier observation corresponds to the same data point which was seen as an outlier in Fig.4 and Fig.7 and warrants a deeper investigation of this test. This outlier point is also one of the causes of the deviation from linearity of the points in Fig.8, which is again an indication of a lack of fit of the Weibull regression model. It would be interesting to compare this plot with a similar plot from a non-constant $\sigma$ model (to be discussed in a separate article). 
+
+```{r Std. Residuals Weibull Plot Calculation, include=FALSE}
+#Next, we will plot a Weibull plot of the standardized residuals. In order to plot a Weibull plot, I need to plot log(t.p) vs log[-log(1-p)] as per Section 6.2.4 in SMRD2. Note that (1-p) is nothing but the Kaplan Meir survival probability (because p is the CDF).
+
+#First, I need the Kaplan Meir estimate of the CDF of the standardized residuals
+
+fitModel1.KaplanMeir <- survival::survfit(Surv(stdResid.round,delta) ~ 1, data = ceramic)
+
+summary(fitModel1.KaplanMeir)
+
+#Next, I need the confidence band. I tried using the survMisc package, but the confidence bands I was getting did not make sense. The survival lower and upper bounds of the survival probability band increased at some times, which does not make sense because survival function is strictly non-increasing. The survMisc package is from 2016 and is very old. I used the km.ci package with the log transformed Equal probability band and even this gave me confidence bands where the survival function increased at some point. After reading the section on confidence bands in SMRD2 (Section 3.8 in Chapter 3), I realized that it is possible that sometimes this can happen. Don't panic! All you need to do is adjust the confidence bands as mentioned in the Section 3.8. Here is what you need to do to adjust the bands: "If the upper band is decreasing on the left, it is made flat from tL(a) to the point of the minimum. If the lower band is decreasing on the right, it is made flat from the point of maximum to tU(b) . These adjustments, if needed, give tighter, more sensible bands and have no effect on the actual coverage probability of the nonparametric simultaneous bands." This is also mentioned in SAS documentation here: "https://documentation.sas.com/doc/en/pgmsascdc/9.4_3.4/statug/statug_lifetest_details11.htm", but it references the same SMRD2 book.
+
+#Also, the latest version of the km.ci package is from 2022 and is newer as compared to survMisc. Going forward, I should use km.ci for confidence bands and not survMisc.
+
+#survFitObject <- survival::survfit(Surv(stdResid.round,delta) ~ 1, data = ceramic) #Required for km.ci on the next line.
+
+confBands2 <- km.ci::km.ci(fitModel1.KaplanMeir, conf.level = 0.95, method = "logep") #"logep" recommended by km.ci package documentation.
+
+#create a dataframe with all the probabilities that I need to plot
+
+weibullPlot.model1 <- data.frame(t.p = fitModel1.KaplanMeir[["time"]],
+                          survival.p = fitModel1.KaplanMeir[["surv"]]) %>%
+  dplyr::mutate(p = 1 - survival.p) %>%
+  dplyr::filter(row_number() <= n()-1) %>% #The observation with survival probability 0 i.e. the last observation is removed since we cannot have confidence band values for this observation.
+  dplyr::mutate(survival.lower = confBands2$lower,
+                survival.upper = confBands2$upper) %>%
+  dplyr::mutate(p.lower = round(1 - survival.upper,3),
+                p.upper = round(1 - survival.lower,3)) 
+
+xTransformer <- scales::trans_new(
+  name = "weibull.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer <- scales::trans_new(
+  name = "weibull.y.transform",
+  transform = function(p){
+    y = log(-log(1-p))
+    return(y)
+  },
+  inverse = function(y) {
+    p = 1 - exp(-exp(y))
+    return(p)
+  }
+)
+
+#Plot Fig 17.5 b
+
+ggplot(weibullPlot.model1, aes(x = t.p, y = p)) + geom_point() + geom_step(aes(y = p.lower)) + geom_step(aes(y = p.upper)) + scale_x_continuous(transform = xTransformer, name = "Standardized Residuals", breaks = c(0.001,0.01, 0.1, 1)) + scale_y_continuous(transform = yTransfomer, name = "Fraction Failing",breaks = seq(0.01,0.99,0.05))
+
+#Notice that the upper bound of the confidence band decreases at a point. Hence, an adjustment, as discussed above, is needed.
+
+weibullPlot.model1$p.upper[c(1)] <- weibullPlot.model1$p.upper[2]
+
+#Plot 17.5b again, with the adjusted upper band.
+
+
+
+```
+
+
+
+```{r Std Resid Weibull plot, fig.cap="Figure 8: Weibull Probability Plot of Standardized Residuals", cache=TRUE, include=FALSE}
+ggplot(weibullPlot.model1, aes(x = t.p, y = p)) + geom_point() + geom_step(aes(y = p.lower)) + geom_step(aes(y = p.upper)) + scale_x_continuous(transform = xTransformer, name = "Standardized Residuals", breaks = c(0.001,0.01, 0.1, 1,2,3)) + scale_y_continuous(transform = yTransfomer, name = "Fraction Failing",breaks = seq(0.01,0.99,0.1))
+```
+
+# Conclusion
+
+A time-to-failure dataset from a life test of ceramic ball bearings was analyzed using a Weibull regression model. The model assumed a constant shape parameter across all levels of the explanatory variable, stress. The regression model exhibited a lack of fit, leading to possibly biased estimates. An alternate model with different transformations of the the covariate stress or a more complex model which allows the shape parameter to vary would be worth considering. These techniques will be explored in another article.  
+
+# Acknowledgements
+
+1. Most of what I have learnt about time-to-event analysis is from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger) and Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual).
+
+2. All analyses were performed using R Statistical Software(v4.4.1; R Core Team 2024). The *survival* R package(v3.7.0; Therneau T 2024) was extensively used. Please refer to next section for all the packages used, their versions and the names of the package developers who deserve credit for building these amazing open source packages.
+
+3. This article's format is a style that Edward Tufte uses in his books and handouts. I have used the *tufte* library in R and am grateful to the authors of this package. 
+
+# Credits for R packages used
+
+```{r echo=FALSE}
+report::cite_packages()
+```
+
+# End
+
+I hope you found this article informative! If you have any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at shishir909@gmail.com.
+
+
+
+```{r eval=FALSE, include=FALSE}
+lambda.seq <- seq(-8,8,0.1) #Checking a range from-4 to +4, but excluding 0.
+
+lambda.seq <- lambda.seq[lambda.seq != 0] #Exclude 0
+
+lambda.log.likelihood <- data.frame(lambda = lambda.seq,
+                                    LL = vector(mode = "double", length = length(lambda.seq)))
+i <- 1
+while(i <= length(lambda.seq)){
+  
+  ceramic <- ceramic %>%
+    dplyr::mutate(Stress.boxCox = ((Stress**lambda.seq[i])-1)/lambda.seq[i])
+  
+  para_fit_Weibull.lambda <- survival::survreg(Surv(Revolutions, delta) ~ Stress.boxCox, data = ceramic, dist = "weibull")
+
+lambda.log.likelihood$LL[i] <-  para_fit_Weibull.lambda[["loglik"]][2]
+  
+i <- i + 1
+}
+
+lambda.log.likelihood$lambda[which.max(lambda.log.likelihood$LL)] #This is the lambda with the max log-likelihood. The likelihood is maximized at lambda = 1.6. 
+
+lambda <- lambda.log.likelihood$lambda[which.max(lambda.log.likelihood$LL)]
+
+ceramic <- ceramic %>%
+    dplyr::mutate(Stress.boxCox = ((Stress**lambda)-1)/lambda)
+
+para_fit_Weibull.lambda <- survival::survreg(Surv(Revolutions, delta) ~ Stress.boxCox, data = ceramic, dist = "weibull")
+  
+summary(para_fit_Weibull.lambda)
+
+```
+
+
+
+
+```{r eval=FALSE, include=FALSE}
+#ROUGH
+
+#Log normal plot 17.7 a
+cols <- c("0.87 Mpsi"="red","0.99 Mpsi"="blue","1.09 Mpsi"="green","1.18 Mpsi"="orange")
+ggplot() + geom_point(
+  data = Fig17_CDF[["0.87"]],
+  aes(x = Revolutions, y = p, color = "0.87 Mpsi")
+  ) + geom_point(
+  data = Fig17_CDF[["0.99"]],
+  aes(x = Revolutions, y = p, color = "0.99 Mpsi"),
+  ) + geom_point(
+  data = Fig17_CDF[["1.09"]],
+  aes(x = Revolutions, y = p, color = "1.09 Mpsi")
+) + geom_point(
+  data = Fig17_CDF[["1.18"]],
+  aes(x = Revolutions, y = p, color = "1.18 Mpsi")
+) + scale_x_continuous(
+  transform = xTransformer.logNormal,
+  name = "Millions of Revolutions",
+  breaks = c(10, 100, 1000, 10000, 100000)
+) + scale_y_continuous(
+  transform = yTransfomer.logNormal,
+  name = "Fraction Failing",
+  breaks = seq(0.00,1.0,0.05)
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["0.87"]][1]/Fig17.a_MLest[["0.87"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["0.87"]][2], color = "0.87 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["0.99"]][1]/Fig17.a_MLest[["0.99"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["0.99"]][2], color = "0.99 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["1.09"]][1]/Fig17.a_MLest[["1.09"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["1.09"]][2], color = "1.09 Mpsi")
+) + geom_abline(
+  aes(intercept = (-Fig17.a_MLest[["1.18"]][1]/Fig17.a_MLest[["1.18"]][2]), #y-axis intercept
+      slope = 1/Fig17.a_MLest[["1.18"]][2], color = "1.18 Mpsi")
+) + ggtitle(label = "Log-Normal") + scale_color_manual(name="Stress",values = cols)
+```
+
+
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
