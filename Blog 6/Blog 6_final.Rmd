@@ -38,7 +38,7 @@ setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/In
 
 This is the second part of the article on parametric modeling^[You can find the first part [**here**](https://rpubs.com/shishir909/1251052)]. In the previous part, we fit a Weibull regression model to a time-to-failure dataset from a life test on ceramic bearings. In this article, we will see if we can improve on the previous model by fitting a different model that can account for a varying shape parameter across different levels of the independent variable.
 
-Similar to the first part, I have not included any R code within the article, but they are available on my Github page and can be accessed [**here**](https://github.com/shishir-909/Survival-Analysis/blob/d10f2b18c2eaf745f1188e368d3c7f882efc34ca/Blog%205/Blog%205.Rmd).
+Similar to the first part, I have not included any R code within the article, but they are available on my Github page and can be accessed [**here**](https://github.com/shishir-909/Survival-Analysis/blob/931301ffee99b54144d53f63936ae3a09abe5aa1/Blog%206/Blog%206_final.Rmd).
 
 # Weibull Regression
 
