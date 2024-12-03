@@ -704,7 +704,7 @@ fs1
 fs_quantile <- predict(fs1,
         newdata = data.frame(Stress = 1.15), type = 'quantile', p=c(0.1,0.5), se.fit = T)
 
-#flexsurv output matches my manual calculation output!!
+#flexsurv output matches my manual calculation output!! Here is the conversion for the different parameterizations: https://drive.google.com/open?id=1-j9vebU_xxdKl4vMuT5Ph2wEZqlkI632&usp=drive_fs
 
 ```
 
