@@ -92,6 +92,7 @@ $$
 Table 1 shows the ML estimates, standard errors and the Wald 95% confidence intervals of $\beta_{0}$, $\beta_{1}$, $\beta^{*}_{0}$ and $\beta^{*}_{1}$ from the model in Eq.B.
 
 ```{r IRLS computations continuous varSig, include=FALSE}
+#My manual notes here: https://drive.google.com/open?id=1-MXUBr5OvIk7O1HKI27Cd-jBnlNdB0E6&usp=drive_fs
 
 ceramic <- ceramic %>%
   dplyr::mutate(logStress = log(Stress)) %>%
@@ -330,7 +331,7 @@ sigma.1.18.varSig <- exp(beta.0s + (beta.1s*log(1.18)))
 ```
 
 
-```{r include=FALSE}
+```{r Weibull plot prep, include=FALSE}
 #Fig 17.7 a and b equivalent for ceramic data
 
 ##I need the Kaplan Meir estimates of the CDF for each level of stress. Instead of coding 4 separate times for 4 stress levels, I am going to loop it.
@@ -571,7 +572,7 @@ kableExtra::collapse_rows(t)
 
 Fig.2 shows a plot of the standardized residuals against fitted values. Compare this plot to the corresponding plot for the constant shape parameter model ^[Fig.7  in the [**previous article**](https://rpubs.com/shishir909/1251052)]. Notice that the spread of the points is much more *equal* in this plot here as compared to a model with a constant shape parameter.
 
-```{r Std. Residuals vs Fitted Values, include=FALSE}
+```{r Std. Residuals vs Fitted Values prep, include=FALSE}
 #First, add a column for the linear predictors. This is nothing but "mu + gamma.transpose*Z" for every observation.
 
 ceramic <- ceramic %>%
@@ -586,7 +587,7 @@ ceramic <- ceramic %>%
 ```
 
 
-```{r Std Resid vs fitted, echo=FALSE, fig.cap="Figure 2: Standardized Residuals vs Fitted Values", cache=TRUE}
+```{r Std Resid vs fitted values, echo=FALSE, fig.cap="Figure 2: Standardized Residuals vs Fitted Values", cache=TRUE}
 
 ggplot(ceramic, aes(x = exp(LinearPredictor), y = stdResid, group = delta)) + geom_point() + coord_trans(x = 'log', y = 'log') + ylab("Standardized Residuals") + xlab("Fitted Values") #Matches figure 17.5a! Notice that the variability is higher at larger fitted values.
 
@@ -596,7 +597,7 @@ ggplot(ceramic, aes(x = exp(LinearPredictor), y = stdResid, group = delta)) + ge
 
 Fig. 3 shows a Weibull plot of the standardized residuals along with the 95% confidence bands. Comparing this plot to the corresponding plot in the previous article^[Fig.8 in the [**previous article**](https://rpubs.com/shishir909/1251052)] reveals that this plot suffers from a similar deviation from linearity as did the one with the constant shape parameter model.
 
-```{r Std. Residuals Weibull Plot Calculation, include=FALSE}
+```{r Std. Residuals Weibull Plot prep, include=FALSE}
 #Next, we will plot a Weibull plot of the standardized residuals. In order to plot a Weibull plot, I need to plot log(t.p) vs log[-log(1-p)] as per Section 6.2.4 in SMRD2. Note that (1-p) is nothing but the Kaplan Meir survival probability (because p is the CDF).
 
 #First, I need the Kaplan Meir estimate of the CDF of the standardized residuals
@@ -674,7 +675,7 @@ R <- suppressWarnings(print(std.resid.prob.plot))
 
 # Conclusion
 
-A Weibull regression model with a varying shape parameter was fit to data from a ceramic bearings life test. A likelihood ratio test comparing this model to the constant shape parameter model gave a non-significant result, which means that there is no evidence of any improvement gained with the non-constant shape parameter model, at the 5% significance level. Nevertheless, considering that a stress effect on the shape parameter has been frequently observed in rolling contact fatigue testing, it probably does make sense to use such a model, especially if we need to extrapolate outside the range of stress values available from the life test.   
+A Weibull regression model with a varying shape parameter was fit to data from a ceramic bearings life test. A likelihood ratio test comparing this model to the constant shape parameter model gave a non-significant result, which means that there is no evidence of any improvement gained with the non-constant shape parameter model, at the 5% significance level. Nevertheless, considering that a stress effect on the shape parameter has been frequently observed in rolling contact fatigue testing, this model still has some value, especially if we need to extrapolate outside the range of stress values available outside the life test.     The residual probability plot shows deviation from linearity, which is an indication that the Weibull distribution assumption is also suspect. Additional investigation could include trying a Box-Cox transformation of the independent variable or trying a different distribution (eg: log-normal). 
 
 # Acknowledgements
 

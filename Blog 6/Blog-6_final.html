@@ -12,7 +12,7 @@
 
 <meta name="author" content="Shishir Rao" />
 
-<meta name="date" content="2024-12-02" />
+<meta name="date" content="2024-12-03" />
 
 <title>Parametric Modeling of Failure Time data: Part II</title>
 
@@ -316,14 +316,14 @@ if (window.hljs) {
 <h1 class="title toc-ignore">Parametric Modeling of Failure Time data: Part II</h1>
 <h3 class="subtitle">Application using R Statistical Software</h3>
 <h4 class="author">Shishir Rao</h4>
-<h4 class="date">2024-12-02</h4>
+<h4 class="date">2024-12-03</h4>
 
 
 
 <div id="introduction" class="section level1">
 <h1>Introduction</h1>
 <p>This is the second part of the article on parametric modeling<label for="tufte-sn-1" class="margin-toggle sidenote-number">1</label><input type="checkbox" id="tufte-sn-1" class="margin-toggle"><span class="sidenote"><span class="sidenote-number">1</span> You can find the first part <a href="https://rpubs.com/shishir909/1251052"><strong>here</strong></a></span>. In the previous part, we fit a Weibull regression model to a time-to-failure dataset from a life test on ceramic bearings. In this article, we will see if we can improve on the previous model by fitting a different model that can account for a varying shape parameter across different levels of the independent variable.</p>
-<p>Similar to the first part, I have not included any R code within the article, but they are available on my Github page and can be accessed <a href="https://github.com/shishir-909/Survival-Analysis/blob/d10f2b18c2eaf745f1188e368d3c7f882efc34ca/Blog%205/Blog%205.Rmd"><strong>here</strong></a>.</p>
+<p>Similar to the first part, I have not included any R code within the article, but they are available on my Github page and can be accessed <a href="https://github.com/shishir-909/Survival-Analysis/blob/931301ffee99b54144d53f63936ae3a09abe5aa1/Blog%206/Blog%206_final.Rmd"><strong>here</strong></a>.</p>
 </div>
 <div id="weibull-regression" class="section level1">
 <h1>Weibull Regression</h1>
@@ -584,7 +584,7 @@ Figure 3: Weibull Probability Plot of Standardized Residuals
 </div>
 <div id="conclusion" class="section level1">
 <h1>Conclusion</h1>
-<p>A Weibull regression model with a varying shape parameter was fit to data from a ceramic bearings life test. A likelihood ratio test comparing this model to the constant shape parameter model gave a non-significant result, which means that there is no evidence of any improvement gained with the non-constant shape parameter model, at the 5% significance level. Nevertheless, considering that a stress effect on the shape parameter has been frequently observed in rolling contact fatigue testing, it probably does make sense to use such a model, especially if we need to extrapolate outside the range of stress values available from the life test.</p>
+<p>A Weibull regression model with a varying shape parameter was fit to data from a ceramic bearings life test. A likelihood ratio test comparing this model to the constant shape parameter model gave a non-significant result, which means that there is no evidence of any improvement gained with the non-constant shape parameter model, at the 5% significance level. Nevertheless, considering that a stress effect on the shape parameter has been frequently observed in rolling contact fatigue testing, this model still has some value, especially if we need to extrapolate outside the range of stress values available outside the life test. The residual probability plot shows deviation from linearity, which is an indication that the Weibull distribution assumption is also suspect. Additional investigation could include trying a Box-Cox transformation of the independent variable or trying a different distribution (eg: log-normal).</p>
 </div>
 <div id="acknowledgements" class="section level1">
 <h1>Acknowledgements</h1>
