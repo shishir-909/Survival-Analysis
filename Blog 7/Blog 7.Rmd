@@ -1,0 +1,42 @@
+---
+title: "A Tufte Handout Example"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "An implementation in R Markdown" # only for html output
+author: "JJ Allaire and Yihui Xie"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r Load Libraries, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+library(survival)
+library(tidyverse)
+library(readr)
+library(survminer)
+library(kableExtra)
+library(flexsurv)
+library(gridExtra)
+library(km.ci)
+
+setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 7")
+```
+
+# Introduction
+
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
