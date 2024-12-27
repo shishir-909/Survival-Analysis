@@ -1,0 +1,759 @@
+---
+title: "Comparison of Failure Time Distributions"
+runningheader: "Tufte Handout with R Markdown" # only for pdf output
+subtitle: "Parametric Method using R" # only for html output
+author: "Shishir Rao"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r Load Libraries, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+library(survival)
+library(tidyverse)
+library(readr)
+library(survminer)
+library(kableExtra)
+library(flexsurv)
+library(gridExtra)
+library(km.ci)
+
+setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 7")
+```
+
+# Introduction
+
+Applications involving comparison of time-to-failure data from different groups are common in the fields of reliability and manufacturing. For example, a designer might want to implement a new design to reduce costs, but wants to make sure that this change does not adversely affect the reliability of the product. Or, a manufacturer might want to find out if there is any difference in the time-to-failure of products manufactured from different batches or different assembly lines. Parametric and non-parametric methods to compare failure time distributions can be used for such purposes. Two of my previous blog articles([**here**](https://rpubs.com/shishir909/1199328) and [**here**](https://rpubs.com/shishir909/1226309)) dealt with non-parametric methods for comparing failure data. In this article, I demonstrate the use of a parametric method for the same purpose.
+
+I have not included any R code within the article, but they are available on my Github page and can be accessed [**here**](https://github.com/shishir-909/Survival-Analysis/blob/36195c6f99109c607f089d51bcfcb063a0ce681e/Blog%207/Blog%207%20Final.Rmd).
+
+# Data
+
+The data used in this article is from the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)]. It consists of results from a pull test to measure the bond strength of wire bonds from three separate manufacturing batches. Table 1 shows this data, and it is also publicly available on DataShare, Iowa State University's open data repository which can be accessed through [**this link**](https://iastate.figshare.com/articles/dataset/Reliability_Data_Field_Failure-time_Data/14454756?backTo=%2Fcollections%2FData_Sets_Used_in_Statistical_Methods_for_Reliability_Data_Second_Edition_%2F5395665&file=28330629). 
+
+We are interested in finding out whether the bond strength is different across the manufacturing batches.  If we do find that there is a statistically significant difference, we want to find out where is this difference (between which pairs of batches).
+
+```{r Load Table, echo=FALSE, tab.cap="Table 1. Bond Strength"}
+bondStrength <- read_csv("Data/BondStrength.csv", show_col_types = FALSE)
+
+knitr::kable(bondStrength, align = rep('c', 5), table.envir = 'table*') %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+kableExtra::scroll_box(height = "300px")
+
+
+```
+
+
+```{r Rename columns, include=FALSE}
+bondStrength <- bondStrength %>%
+  dplyr::rename(Batch = `Batch Number`,
+                Strength = `Strength (g)`,
+                Censor = `Censoring Indicator`) %>%
+  dplyr::mutate(delta = case_when(Censor == "Failed" ~ 1,
+                                  Censor == "Censored" ~ 0))
+```
+
+# Analysis with Separate Distributions
+
+Our initial approach will be to fit separate distributions to the three groups. In order to proceed with a parametric comparison of the different groups, we first need to figure out which parametric distribution to use for the data. Weibull and log-normal are the most commonly used distributions to describe time-to-failure in reliability applications. For the purpose of demonstrating a parametric comparison, we will consider these two distributions. We have three groups in our data set: Batch 1, Batch 4 and Batch 5. Generally, when the failure mode is the same in all groups, the same distribution is used to fit the data. 
+
+Figure 1 shows a Weibull probability plot and Figure 2 shows a log normal probability plot of the data. The points on these plots are the empirical CDF^[Cumulative Distribution Function] and the lines are ML^[Maximum likelihood] estimates from fitting the respective distributions. 
+
+```{r Weibull Probability Plot, echo=FALSE, fig.cap="Figure 1: Weibull Probability Plot"}
+#Weibull
+
+#Points
+
+fit_1 <- survival::survfit(Surv(Strength, delta) ~ Batch, data = bondStrength)
+
+CDF_Batch1.df <- data.frame(Strength = fit_1[1]$time,
+                     p = 1 - fit_1[1]$surv) %>%
+  dplyr::distinct(p, .keep_all = TRUE) #This line is required. Otherwise, the time column includes all observations. I just need the observations where there is a jump in the CDF.
+  
+CDF_Batch1.df <- CDF_Batch1.df %>%
+      dplyr::mutate(bottomOfStairs = c(0,head(p,-1))) %>%
+      dplyr::mutate(middleOfStairs = (p + bottomOfStairs)/2) %>% #Note: p is top of stairs.
+      dplyr::select(!p) %>%
+      dplyr::rename(p = middleOfStairs) #This piece of code is for plotting the CDF at the mid point of the jumps instead of plotting at the top of the jumps. See Section 6.4.2 of Chapter 6 in SMRD2.
+
+CDF_Batch4.df <- data.frame(Strength = fit_1[2]$time,
+                     p = 1 - fit_1[2]$surv) %>%
+  dplyr::distinct(p, .keep_all = TRUE) #This line is required. Otherwise, the time column includes all observations. I just need the observations where there is a jump in the CDF.
+  
+CDF_Batch4.df <- CDF_Batch4.df %>%
+      dplyr::mutate(bottomOfStairs = c(0,head(p,-1))) %>%
+      dplyr::mutate(middleOfStairs = (p + bottomOfStairs)/2) %>% #Note: p is top of stairs.
+      dplyr::select(!p) %>%
+      dplyr::rename(p = middleOfStairs) #This piece of code is for plotting the CDF at the mid point of the jumps instead of plotting at the top of the jumps. See Section 6.4.2 of Chapter 6 in SMRD2.
+
+CDF_Batch5.df <- data.frame(Strength = fit_1[3]$time,
+                     p = 1 - fit_1[3]$surv) %>%
+  dplyr::distinct(p, .keep_all = TRUE) #This line is required. Otherwise, the time column includes all observations. I just need the observations where there is a jump in the CDF.
+  
+CDF_Batch5.df <- CDF_Batch5.df %>%
+      dplyr::mutate(bottomOfStairs = c(0,head(p,-1))) %>%
+      dplyr::mutate(middleOfStairs = (p + bottomOfStairs)/2) %>% #Note: p is top of stairs.
+      dplyr::select(!p) %>%
+      dplyr::rename(p = middleOfStairs) #This piece of code is for plotting the CDF at the mid point of the jumps instead of plotting at the top of the jumps. See Section 6.4.2 of Chapter 6 in SMRD2.
+
+#Lines
+
+batch1_df <- bondStrength %>%
+  dplyr::filter(Batch == "Batch1")
+batch4_df <- bondStrength %>%
+  dplyr::filter(Batch == "Batch4")
+batch5_df <- bondStrength %>%
+  dplyr::filter(Batch == "Batch5")
+
+fit_2.Batch1.Weibull <- survival::survreg(Surv(Strength, delta) ~ 1, data = batch1_df, dist = "weibull")
+
+fit_2.Batch4.Weibull <- survival::survreg(Surv(Strength, delta) ~ 1, data = batch4_df, dist = "weibull")
+
+fit_2.Batch5.Weibull <- survival::survreg(Surv(Strength, delta) ~ 1, data = batch5_df, dist = "weibull")
+
+mu.ML_Batch1.Weibull <- fit_2.Batch1.Weibull$coefficients
+se_mu.ML_Batch1Weibull <- sqrt(fit_2.Batch1.Weibull[["var"]][1,1])
+sigma.ML_Batch1.Weibull <- fit_2.Batch1.Weibull$scale
+se_sigma.ML_Batch1.Weibull <- sqrt((sigma.ML_Batch1.Weibull**2)*fit_2.Batch1.Weibull[["var"]][2,2])
+mu.ML_Batch1.Weibull.lowerWald90 <- mu.ML_Batch1.Weibull - (qnorm(0.95)*se_mu.ML_Batch1Weibull)
+mu.ML_Batch1.Weibull.upperWald90 <- mu.ML_Batch1.Weibull + (qnorm(0.95)*se_mu.ML_Batch1Weibull)
+sigma.ML_Batch1.Weibull.lowerWald90 <- exp(log(sigma.ML_Batch1.Weibull) - (qnorm(0.95)*fit_2.Batch1.Weibull$var[2,2]))
+sigma.ML_Batch1.Weibull.upperWald90 <- exp(log(sigma.ML_Batch1.Weibull) + (qnorm(0.95)*fit_2.Batch1.Weibull$var[2,2]))
+
+mu.ML_Batch4.Weibull <- fit_2.Batch4.Weibull$coefficients
+se_mu.ML_Batch4Weibull <- sqrt(fit_2.Batch4.Weibull[["var"]][1,1])
+sigma.ML_Batch4.Weibull <- fit_2.Batch4.Weibull$scale
+se_sigma.ML_Batch4.Weibull <- sqrt((sigma.ML_Batch4.Weibull**2)*fit_2.Batch4.Weibull[["var"]][2,2])
+mu.ML_Batch4.Weibull.lowerWald90 <- mu.ML_Batch4.Weibull - (qnorm(0.95)*se_mu.ML_Batch4Weibull)
+mu.ML_Batch4.Weibull.upperWald90 <- mu.ML_Batch4.Weibull + (qnorm(0.95)*se_mu.ML_Batch4Weibull)
+sigma.ML_Batch4.Weibull.lowerWald90 <- exp(log(sigma.ML_Batch4.Weibull) - (qnorm(0.95)*fit_2.Batch4.Weibull$var[2,2]))
+sigma.ML_Batch4.Weibull.upperWald90 <- exp(log(sigma.ML_Batch4.Weibull) + (qnorm(0.95)*fit_2.Batch4.Weibull$var[2,2]))
+
+mu.ML_Batch5.Weibull <- fit_2.Batch5.Weibull$coefficients
+se_mu.ML_Batch5Weibull <- sqrt(fit_2.Batch5.Weibull[["var"]][1,1])
+sigma.ML_Batch5.Weibull <- fit_2.Batch5.Weibull$scale
+se_sigma.ML_Batch5.Weibull <- sqrt((sigma.ML_Batch5.Weibull**2)*fit_2.Batch5.Weibull[["var"]][2,2])
+mu.ML_Batch5.Weibull.lowerWald90 <- mu.ML_Batch5.Weibull - (qnorm(0.95)*se_mu.ML_Batch5Weibull)
+mu.ML_Batch5.Weibull.upperWald90 <- mu.ML_Batch5.Weibull + (qnorm(0.95)*se_mu.ML_Batch5Weibull)
+sigma.ML_Batch5.Weibull.lowerWald90 <- exp(log(sigma.ML_Batch5.Weibull) - (qnorm(0.95)*fit_2.Batch5.Weibull$var[2,2]))
+sigma.ML_Batch5.Weibull.upperWald90 <- exp(log(sigma.ML_Batch5.Weibull) + (qnorm(0.95)*fit_2.Batch5.Weibull$var[2,2]))
+
+#Transformers
+
+xTransformer.weibull <- scales::trans_new(
+  name = "weibull.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.weibull <- scales::trans_new(
+  name = "weibull.y.transform",
+  transform = function(p){
+    y = log(-log(1-p))
+    return(y)
+  },
+  inverse = function(y) {
+    p = 1 - exp(-exp(y))
+    return(p)
+  }
+)
+
+cols <- c("Batch 1"="red","Batch 4"="blue","Batch 5"="green")
+
+ggplot() + geom_point(data = CDF_Batch1.df, aes(x = Strength, y = p, color = "Batch 1")) + geom_abline(aes(
+  intercept = (-mu.ML_Batch1.Weibull / sigma.ML_Batch1.Weibull),
+  #y-axis intercept
+  slope = 1 / sigma.ML_Batch1.Weibull
+, color = "Batch 1")) + geom_point(data = CDF_Batch4.df, aes(x = Strength, y = p, color = "Batch 4")) + geom_abline(aes(
+  intercept = (-mu.ML_Batch4.Weibull / sigma.ML_Batch4.Weibull),
+  #y-axis intercept
+  slope = 1 / sigma.ML_Batch4.Weibull
+, color = "Batch 4")) + geom_point(data = CDF_Batch5.df, aes(x = Strength, y = p, color = "Batch 5")) + geom_abline(aes(
+  intercept = (-mu.ML_Batch5.Weibull / sigma.ML_Batch5.Weibull),
+  #y-axis intercept
+  slope = 1 / sigma.ML_Batch5.Weibull
+, color = "Batch 5")) + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Strength",
+  breaks = c(5, 10, 20, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = c(
+    0.00003,
+    0.0001,
+    0.0002,
+    0.0005,
+    0.001,
+    0.003,
+    0.01,
+    0.02,
+    0.05,
+    0.1,
+    0.2,
+    0.5,
+    0.7,
+    0.9
+  )
+) + ggtitle(label = "Weibull Probability Plot") + scale_color_manual(name =
+                                                                       "Batch", values = cols)
+
+```
+
+```{r Log normal Probability plot, echo=FALSE, fig.cap="Figure 2: Log-normal Probability Plot"}
+#Log Normal
+
+#Points - Same as above
+
+#Lines
+
+fit_2.Batch1.logNormal <- survival::survreg(Surv(Strength, delta) ~ 1, data = batch1_df, dist = "lognormal")
+
+fit_2.Batch4.logNormal <- survival::survreg(Surv(Strength, delta) ~ 1, data = batch4_df, dist = "lognormal")
+
+fit_2.Batch5.logNormal <- survival::survreg(Surv(Strength, delta) ~ 1, data = batch5_df, dist = "lognormal")
+
+mu.ML_Batch1.logNormal <- fit_2.Batch1.logNormal$coefficients
+se_mu.ML_Batch1logNormal <- sqrt(fit_2.Batch1.logNormal[["var"]][1,1])
+sigma.ML_Batch1.logNormal <- fit_2.Batch1.logNormal$scale
+se_sigma.ML_Batch1.logNormal <- sqrt((sigma.ML_Batch1.logNormal**2)*fit_2.Batch1.logNormal[["var"]][2,2])
+
+mu.ML_Batch4.logNormal <- fit_2.Batch4.logNormal$coefficients
+se_mu.ML_Batch4logNormal <- sqrt(fit_2.Batch4.logNormal[["var"]][1,1])
+sigma.ML_Batch4.logNormal <- fit_2.Batch4.logNormal$scale
+se_sigma.ML_Batch4.logNormal <- sqrt((sigma.ML_Batch4.logNormal**2)*fit_2.Batch4.logNormal[["var"]][2,2])
+
+mu.ML_Batch5.logNormal <- fit_2.Batch5.logNormal$coefficients
+se_mu.ML_Batch5logNormal <- sqrt(fit_2.Batch5.logNormal[["var"]][1,1])
+sigma.ML_Batch5.logNormal <- fit_2.Batch5.logNormal$scale
+se_sigma.ML_Batch5.logNormal <- sqrt((sigma.ML_Batch5.logNormal**2)*fit_2.Batch5.logNormal[["var"]][2,2])
+
+#Transformers
+
+xTransformer.logNormal <- scales::trans_new(
+  name = "logNormal.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.logNormal <- scales::trans_new(
+  name = "logNormal.y.transform",
+  transform = function(p){
+    y = qnorm(p)
+    return(y)
+  },
+  inverse = function(y) {
+    p = pnorm(y)
+    return(p)
+  }
+)
+
+cols <- c("Batch 1"="red","Batch 4"="blue","Batch 5"="green")
+
+ggplot() + geom_point(data = CDF_Batch1.df, aes(x = Strength, y = p, col = "Batch 1")) + geom_abline(
+  aes(intercept = (-mu.ML_Batch1.logNormal/sigma.ML_Batch1.logNormal), #y-axis intercept
+      slope = 1/sigma.ML_Batch1.logNormal,
+      col = "Batch 1"
+)) + geom_point(data = CDF_Batch4.df, aes(x = Strength, y = p, col = "Batch 4")) + geom_abline(
+  aes(intercept = (-mu.ML_Batch4.logNormal/sigma.ML_Batch4.logNormal), #y-axis intercept
+      slope = 1/sigma.ML_Batch4.logNormal,
+      col = "Batch 4"
+)) + geom_point(data = CDF_Batch5.df, aes(x = Strength, y = p, col = "Batch 5")) + geom_abline(
+  aes(intercept = (-mu.ML_Batch5.logNormal/sigma.ML_Batch5.logNormal), #y-axis intercept
+      slope = 1/sigma.ML_Batch5.logNormal,
+      col = "Batch 5"
+)) + scale_x_continuous(
+  transform = xTransformer.logNormal,
+  name = "Strength",
+  breaks = c(5, 10, 20, 50, 100, 200,300,400,500,600,700,800,900,1000)
+) + scale_y_continuous(
+  transform = yTransfomer.logNormal,
+  name = "Fraction Failing",
+  breaks = c(0.00003,0.0001,0.0002,0.0005,0.001,0.003,0.01,0.02,0.05,0.1,0.2,0.5,0.7,0.9)
+) + ggtitle(label = "Log-normal Probability Plot") + scale_color_manual(name =
+                                                                       "Batch", values = cols)
+
+
+```
+
+```{r AIC, include=FALSE}
+AIC_Weibull <- round((AIC(fit_2.Batch1.Weibull) + AIC(fit_2.Batch4.Weibull) + AIC(fit_2.Batch5.Weibull)),2)
+
+AIC_Lognormal <- round((AIC(fit_2.Batch1.logNormal) + AIC(fit_2.Batch4.logNormal) + AIC(fit_2.Batch5.logNormal)),2)
+```
+
+Note that 3 **separate** Weibull distributions were fit - one for each batch. Similarly, 3 **separate** log normal distributions were also fit. Looking at both the plots above, the Weibull distribution seems to fit slightly better than the log-normal, but not by much^[We say that we have a "good fit" when the points (empirical estimates) are reasonably well aligned with the line (Maximum likelihood estimate).]. The data could have come from any of the two distributions we have considered here. We are mainly looking for any indication that a particular distribution is *definitely* not a good fit rather than *proving* that the data is from a particular distribution. The AIC^[Akaike Information Criterion. It is a statistical metric widely used to compare and choose among different models. Lower the AIC, better is the model] from the Weibull model is `r AIC_Weibull` and the log-normal model is `r AIC_Lognormal`. Since the AIC is lower for the Weibull model, we will continue with Weibull distribution, although log-normal wouldn't have been a terrible choice either.
+
+The log location scale model for the Weibull distribution is shown in Eq. A below^[Although we have used the letter "T", which usually denotes "time to failure", it denotes the strength variable in our current example.].
+
+$$
+\hspace{-2cm} 
+\begin{align*}
+F(t;\mu,\sigma) & = Pr(T\le t)\\ & = \Phi_{SEV} \left[\frac{log(t)-\mu}{\sigma}\right]
+\tag{Eq. A}
+\end{align*}
+$$
+SEV in equation A is the smallest extreme value distribution.
+
+Table 2 shows the ML estimates of the location ($\mu$) and scale ($\sigma$) parameters from the log-location scale representation of the Weibull distribution for all three batches.  
+
+```{r SepDists ML Table, echo=FALSE}
+ML_estimates.Weibull <- data.frame(
+  Estimate = c(
+    mu.ML_Batch1.Weibull,
+    sigma.ML_Batch1.Weibull,
+    mu.ML_Batch4.Weibull,
+    sigma.ML_Batch4.Weibull,
+    mu.ML_Batch5.Weibull,
+    sigma.ML_Batch5.Weibull
+  ),
+  Std.Err = c(
+    se_mu.ML_Batch1Weibull,
+    se_sigma.ML_Batch1.Weibull,
+    se_mu.ML_Batch4Weibull,
+    se_sigma.ML_Batch4.Weibull,
+    se_mu.ML_Batch5Weibull,
+    se_sigma.ML_Batch5.Weibull
+  ),
+  WaldCI_lower90 = c(
+    mu.ML_Batch1.Weibull.lowerWald90,
+    sigma.ML_Batch1.Weibull.lowerWald90,
+    mu.ML_Batch4.Weibull.lowerWald90,
+    sigma.ML_Batch4.Weibull.lowerWald90,
+    mu.ML_Batch5.Weibull.lowerWald90,
+    sigma.ML_Batch5.Weibull.lowerWald90
+  ),
+  WaldCI_upper90 = c(
+    mu.ML_Batch1.Weibull.upperWald90,
+    sigma.ML_Batch1.Weibull.upperWald90,
+    mu.ML_Batch4.Weibull.upperWald90,
+    sigma.ML_Batch4.Weibull.upperWald90,
+    mu.ML_Batch5.Weibull.upperWald90,
+    sigma.ML_Batch5.Weibull.upperWald90
+  )
+)
+
+ML_estimates.Weibull <- ML_estimates.Weibull %>%
+  dplyr::mutate(Parameter = c("$\\hat{\\mu}_{Batch1}$","$\\hat{\\sigma}_{Batch1}$","$\\hat{\\mu}_{Batch1}$","$\\hat{\\sigma}_{Batch1}$","$\\hat{\\mu}_{Batch1}$","$\\hat{\\sigma}_{Batch1}$")) %>%
+  dplyr::select(Parameter, everything()) %>%
+  dplyr::mutate(Batch = c(rep("Batch 1",2),rep("Batch 4",2),rep("Batch 5",2))) %>%
+  dplyr::select(Batch, everything())
+
+colnames(ML_estimates.Weibull) <- c("Batch", "Parameter", "ML Estimate", "Standard Error", "Wald Lower 90% CI", "Wald Upper 90% CI")
+
+t <- knitr::kable(ML_estimates.Weibull, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+  
+kableExtra::collapse_rows(t)
+```
+
+
+Figure 3 shows the approximate 90% joint confidence regions based on the relative likelihood for the Weibull distribution median and the shape parameter $\beta$^[$\beta = 1/\sigma$]. There is a significant amount of overlap between Batches 4 and 5, which suggests that the difference in medians between these two batches might not be statistically significant. We can also see from Table 2 that the confidence intervals for the location parameter $\mu$ for Batches 4 and 5 overlap. 
+
+The amount of overlap in the confidence regions of Batch 1 with Batch 5 in Figure 3 is very low, which means the difference in medians of Batch 1 and Batch 5 might be statistically significant.      
+
+```{r Joint Confidence Region, echo=FALSE, fig.cap="Figure 3: Relative Likelihood Contour plot", warning=FALSE}
+#Contour plot
+
+df_Batch1 <-  bondStrength[which(bondStrength$Batch == "Batch1"),]
+df_Batch4 <-  bondStrength[which(bondStrength$Batch == "Batch4"),]
+df_Batch5 <-  bondStrength[which(bondStrength$Batch == "Batch5"),]
+
+loglik1 <- function(df,mu,sigma){
+  
+  failures.df <- df %>%
+    dplyr::filter(delta == 1)
+
+  censored.df <- df %>%
+    dplyr::filter(delta == 0)
+  
+  r.i.F <- (log(failures.df$Strength) - mu)/sigma
+  
+  r.i.C <- (log(censored.df$Strength) - mu)/sigma
+  
+  ll <- sum(-log(sigma)-log(failures.df$Strength) + r.i.F - exp(r.i.F)) + sum(-exp(r.i.C)) # I added the "-log(failures.df$Strength)" here so that the log likelihood matches survival package results
+  
+  ll
+    
+}
+
+# Create a grid of parameter values. Note that you should only create a grid for the "X" and "Y" parameters on the contour plot that you want to plot. For example, we want to print contour plot of the median vs beta here. So, we will create a grid of median vs beta, as shown below. If I wanted mu and sigma contour plot, I would create a grid of mu and sigma, like I did in Chapter 8.
+
+beta_range <- seq(1,8, length = 100)
+t.p_range <- seq(200, 1000, length=100)
+grid <- expand.grid(median = t.p_range, beta = beta_range)
+qsev_0.5 <- log(-log(1-0.5))
+loglik.Batch1_ML <- fit_2.Batch1.Weibull$loglik[2]
+loglik.Batch4_ML <- fit_2.Batch4.Weibull$loglik[2]
+loglik.Batch5_ML <- fit_2.Batch5.Weibull$loglik[2]
+
+
+#test_fit$
+#summary(test_fit)
+
+grid <- grid %>%
+  dplyr::mutate(sigma = 1/beta) %>%
+  dplyr::mutate(mu = log(median) - (qsev_0.5*sigma)) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(ll_Batch1 = loglik1(df_Batch1,mu,sigma),
+                ll_Batch4 = loglik1(df_Batch4,mu,sigma),
+                ll_Batch5 = loglik1(df_Batch5,mu,sigma)) %>%
+  dplyr::mutate(RelLik_Batch1 = exp(ll_Batch1)/exp(loglik.Batch1_ML),
+                RelLik_Batch4 = exp(ll_Batch4)/exp(loglik.Batch4_ML),
+                RelLik_Batch5 = exp(ll_Batch5)/exp(loglik.Batch5_ML)) %>%
+  dplyr::mutate(confidenceRegion_Batch1 = 100*(1-RelLik_Batch1),
+                confidenceRegion_Batch4 = 100*(1-RelLik_Batch4),
+                confidenceRegion_Batch5 = 100*(1-RelLik_Batch5))
+
+# Create the contour plot for Op1
+
+cols <- c("Batch 1"="red","Batch 4"="blue","Batch 5"="green")
+
+a <- ggplot() +
+  geom_contour(
+    data = grid,
+    aes(x = median, y =  beta, z = confidenceRegion_Batch1,
+    col = "Batch 1"),
+    breaks = c(90)
+  ) +
+  geom_contour(
+    data = grid,
+    aes(x = median, y =  beta, z = confidenceRegion_Batch4,
+    col = "Batch 4"),
+    breaks = c(90)
+  ) +
+  geom_contour(
+    data = grid,
+    aes(x = median, y =  beta, z = confidenceRegion_Batch5,
+    col = "Batch 5"),
+    breaks = c(90)
+  ) +
+  scale_x_continuous(breaks = seq(200, 850, 50), limits = c(200,850)) +
+  scale_y_continuous(breaks = seq(1,8,0.5), limits = c(1,8)) +
+  labs(x = "median", y = "beta") + #Looks like plot 12.4 (b)!! Notice that the 95% confidence regions do not overlap. This means that we have evidence at the 5% significance level to claim that the time to failure for the 3 operators are different (statistical significance) 
+ggtitle(label = "90% Confidence Regions") + scale_color_manual(name =
+                                                                       "Batch", values = cols)
+
+suppressWarnings(print(a))
+
+```
+
+Although the confidence regions give us an idea of how different the batches are to each other, we can formalize the analysis by conducting pairwise comparisons. These pairwise comparisons can be conducted at any particular quantile. For example, we may want to test whether the 20% quantile of all three batches are different. Since we have constructed the confidence region using the median (50% quantile), we will continue with the pairwise comparisons of the medians.
+
+Constructing simultaneous confidence intervals for the difference in log(medians)^[Why log of median and not just median? Because, we will use the log-location scale representation of the Weibull distribution as shown in Equation A above and it is easier to work with logarithms. The conclusion is not affected by this transformation.] of two groups is a good way of making such comparisons. If the interval contains zero, we do not have evidence that the medians are different for that pair. If the interval does not contain zero, then we do have evidence of a difference in the medians for that pair. That is, we want to construct the simultaneous confidence intervals for the following:
+
+
+
+$$
+\hspace{-2cm} 
+\begin{align*}
+\Delta_{14} = \hat{y}_{Batch4} - \hat{y}_{Batch1}\\
+\Delta_{15} = \hat{y}_{Batch5} - \hat{y}_{Batch1}\\
+\Delta_{45} = \hat{y}_{Batch5} - \hat{y}_{Batch4}\\
+\end{align*}
+$$
+Where,
+
+$$
+\hat{y}_{Batch1} = log(t_{0.5}) = \hat{\mu}_{Batch1} + \Phi^{-1}_{SEV}(0.5)\hat{\sigma}_{Batch1}\\
+\hat{y}_{Batch4} = log(t_{0.5}) = \hat{\mu}_{Batch4} + \Phi^{-1}_{SEV}(0.5)\hat{\sigma}_{Batch4}\\
+\hat{y}_{Batch5} = log(t_{0.5}) = \hat{\mu}_{Batch5} + \Phi^{-1}_{SEV}(0.5)\hat{\sigma}_{Batch5}\\
+$$
+$t_{0.5}$ is the 50% quantile i.e. median.
+
+Why should we construct simultaneous confidence intervals and not regular confidence intervals? The short answer is that, if we do not use simultaneous confidence intervals, the actual probability that all three intervals will contain the true difference will be lower than the nominal confidence level that we have chosen i.e 90%.^[I hope to write a separate article in the future explaining the difference between regular CI and simultaneous CI and why are they needed.]  
+
+Table 3 shows the estimated difference in the log medians, the standard error and the simultaneous confidence interval^[Bonferroni method used for adjusting the Type 1 error rate for constructing simultaneous CIs] for the three comparisons.
+
+```{r Median difference Bonferroni, echo=FALSE, tab.cap="Table 3: Estimates of differences in medians"}
+#Median for the 3 operators from SepDists model
+
+median_Batch1 <- predict(fit_2.Batch1.Weibull, type = "quantile", p = 0.5, se.fit = T)$fit[1]
+se_median_Batch1 <- predict(fit_2.Batch1.Weibull, type = "quantile", p = 0.5, se.fit = T)$se.fit[1]
+logMedian_Batch1 <- log(median_Batch1) #Needed to replicate Table 12.6
+se_logMedian_Batch1 <- se_median_Batch1/median_Batch1 #Needed to replicate Table 12.6
+
+median_Batch4 <- predict(fit_2.Batch4.Weibull, type = "quantile", p = 0.5, se.fit = T)$fit[1]
+se_median_Batch4 <- predict(fit_2.Batch4.Weibull, type = "quantile", p = 0.5, se.fit = T)$se.fit[1]
+logMedian_Batch4 <- log(median_Batch4) #Needed to replicate Table 12.6
+se_logMedian_Batch4 <- se_median_Batch4/median_Batch4 #Needed to replicate Table 12.6
+
+median_Batch5 <- predict(fit_2.Batch5.Weibull, type = "quantile", p = 0.5, se.fit = T)$fit[1]
+se_median_Batch5 <- predict(fit_2.Batch5.Weibull, type = "quantile", p = 0.5, se.fit = T)$se.fit[1]
+logMedian_Batch5 <- log(median_Batch5) #Needed to replicate Table 12.6
+se_logMedian_Batch5 <- se_median_Batch5/median_Batch5 #Needed to replicate Table 12.6
+
+diffInlogMedian_41 <- logMedian_Batch4 -logMedian_Batch1 #Use a positive difference i.e. don't do Op1 - Op2. You can do it if you want, but the delta will be negative, and both CI limits will be -ve as well. Interpretation will be slightly tricky. Thats it.
+se_diffInlogMedian_41 <- sqrt((se_logMedian_Batch1**2) + (se_logMedian_Batch4**2))
+diffInlogMedian_41_lowerWald <- diffInlogMedian_41 - (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_41)
+diffInlogMedian_41_upperWald <- diffInlogMedian_41 + (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_41)
+
+
+
+diffInlogMedian_51 <- logMedian_Batch5 -logMedian_Batch1
+se_diffInlogMedian_51 <- sqrt((se_logMedian_Batch1**2) + (se_logMedian_Batch5**2))
+diffInlogMedian_51_lowerWald <- diffInlogMedian_51 - (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_51)
+diffInlogMedian_51_upperWald <- diffInlogMedian_51 + (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_51)
+
+diffInlogMedian_54 <- logMedian_Batch5 -logMedian_Batch4
+se_diffInlogMedian_54 <- sqrt((se_logMedian_Batch4**2) + (se_logMedian_Batch5**2))
+diffInlogMedian_54_lowerWald <- diffInlogMedian_54 - (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_54)
+diffInlogMedian_54_upperWald <- diffInlogMedian_54 + (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_54)
+
+delta_median.df <- data.frame(Delta = c("$\\Delta_{41}$", "$\\Delta_{51}$", "$\\Delta_{54}$"),
+                              Estimate = c(diffInlogMedian_41, diffInlogMedian_51, diffInlogMedian_54),
+                              Std.Error = c(se_diffInlogMedian_41, se_diffInlogMedian_51, se_diffInlogMedian_54),
+                              lower.CI = c(diffInlogMedian_41_lowerWald, diffInlogMedian_51_lowerWald, diffInlogMedian_54_lowerWald),
+                              upper.CI = c(diffInlogMedian_41_upperWald, diffInlogMedian_51_upperWald, diffInlogMedian_54_upperWald))
+
+colnames(delta_median.df) <- c("Delta", "ML Estimate", "Standard Error", "Simulataneous approximate 90% CI (Lower)", "Simulataneous approximate 90% CI (Upper)")
+
+m <- knitr::kable(delta_median.df, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+m
+```
+
+From Table 3, we see that it is only the simultaneous confidence interval for $\Delta_{51}$ that does not contain zero, which means we have evidence at the 10% significance level to say that the medians for Batches 1 and 5 are different. Since the CI is negative, the median for Batch 1 seems to be greater than the median of Batch 5 (at the 10% significance level). We cannot say the same for the other two comparisons since their CIs includes zero. 
+
+
+# Analysis with an Equal Shape ($\sigma$) parameter
+
+In the previous section, we fit three separate Weibull distributions - one for each batch. This led to the estimation of 6 parameters ($\mu_{Batch1}, \mu_{Batch4},\mu_{Batch5},\sigma_{Batch1},\sigma_{Batch4},\sigma_{Batch5}$), as shown in Table 2. When comparing groups where the mode of failure is the same in all groups, it is reasonable to try fitting a distribution that has the same $\sigma$ parameter across all groups and only let the location (i.e $\mu$) vary. Such a model can be represented by the following regression equation:
+
+$$
+y = log(t_{p}) = {\beta}_{0} + {\beta}_{1}x_{Batch4} + {\beta}_{2}x_{Batch5} + \Phi^{-1}_{SEV}(p){\sigma}\\
+\tag{Eq. B}
+$$
+Where
+
+$$
+\begin{align*}
+x_{Batch4} & = 1 \quad \text{when group is Batch 4 and}\\  x_{Batch4} & = 0 \quad \text{otherwise}\\
+x_{Batch5} & = 1 \quad \text{when group is Batch 5 and}\\  x_{Batch5} & = 0 \quad \text{otherwise}\\
+\end{align*}
+$$
+Notice that in this model, we have the same $\sigma$ parameter for all batches. The advantage of using such a model is that it uses the available data to estimate only 4 parameters ($\beta_{0}$, $\beta_{1}$, $\beta_{2}$ and $\sigma$) instead of 6 parameters that we estimated in the last section^[Lower the number of parameters to be estimated, simpler is the model and lower is the risk of over fitting a model.].
+
+Table 4 below shows the estimate, standard error and the Wald 90% confidence interval for the parameters from Eq. B. 
+
+```{r EqualSig ML table, echo=FALSE, tab.cap="Table 4: ML Estimates with Equal $\\sigma$"}
+fit_3 <- survival::survreg(Surv(Strength, delta) ~ Batch, data = bondStrength, dist = "weibull")
+
+#summary(fit_3)
+
+beta.0 <- fit_3$coefficients[1]
+se_beta.0 <- sqrt(fit_3$var[1,1])
+beta.1 <- fit_3$coefficients[2]
+se_beta.1 <- sqrt(fit_3$var[2,2])
+beta.2 <- fit_3$coefficients[3]
+se_beta.2 <- sqrt(fit_3$var[3,3])
+sigma.EqualSig <- fit_3$scale
+se_sigma.EqualSig <- fit_3$scale*sqrt(fit_3$var[4,4])
+
+ML_estimates_EqualSig.Weibull <- data.frame(
+  Estimate = c(
+    beta.0,
+    beta.1,
+    beta.2,
+    sigma.EqualSig
+  ),
+  Std.Err = c(
+    se_beta.0,
+    se_beta.1,
+    se_beta.2,
+    se_sigma.EqualSig
+  ),
+  WaldCI_lower90 = c(
+    beta.0-(qnorm(0.95)*se_beta.0),
+    beta.1-(qnorm(0.95)*se_beta.1),
+    beta.2-(qnorm(0.95)*se_beta.2),
+    exp(log(fit_3$scale) - (qnorm(0.95)*sqrt(fit_3$var[4,4])))
+  ),
+  WaldCI_upper90 = c(
+    beta.0+(qnorm(0.95)*se_beta.0),
+    beta.1+(qnorm(0.95)*se_beta.1),
+    beta.2+(qnorm(0.95)*se_beta.2),
+    exp(log(fit_3$scale) + (qnorm(0.95)*sqrt(fit_3$var[4,4])))
+  )
+)
+
+ML_estimates_EqualSig.Weibull <- ML_estimates_EqualSig.Weibull %>%
+  dplyr::mutate(Parameter = c("$\\hat{\\beta_{0}}$","$\\hat{\\beta_{1}}$","$\\hat{\\beta_{2}}$","$\\hat{\\sigma}$")) %>%
+  dplyr::select(Parameter, everything())
+
+colnames(ML_estimates_EqualSig.Weibull) <- c("Parameter", "ML Estimate", "Standard Error", "Wald Lower 90% CI", "Wald Upper 90% CI")
+
+rownames(ML_estimates_EqualSig.Weibull) <- NULL
+
+q <- knitr::kable(ML_estimates_EqualSig.Weibull, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+  
+q
+
+#LR tests
+
+ll_SepDists.weibull <- fit_2.Batch1.Weibull$loglik[2] + fit_2.Batch4.Weibull$loglik[2] + fit_2.Batch5.Weibull$loglik[2]
+
+chi.sq.Stat <- 2*(ll_SepDists.weibull - fit_3$loglik[2])
+
+sepDists.equalSig_pval <- 1-pchisq(chi.sq.Stat, 2) #p-val = 0.609
+
+fit_4 <- survival::survreg(Surv(Strength, delta) ~ 1, data = bondStrength, dist = "weibull")
+
+chi.sq.Stat.2 <- 2*(fit_3$loglik[2] - fit_4$loglik[2])
+
+equalSig.pooled_pval <- 1-pchisq(chi.sq.Stat.2,2) #p-val = 0.0043
+
+```
+
+Figure 4 shows the Weibull probability plot for the equal $\sigma$ model. The $\sigma$ parameter determines the slope of the line on the Weibull plot. Since it is the same for all three batches, the lines on this plot are parallel to each other as opposed to the lines shown in Figure 1. 
+
+```{r Weibull Probability Plot EqualSig, echo=FALSE, fig.cap="Figure 4: Weibull Probability PLot for the Equal $\\sigma$ model."}
+
+#Points (Already calculate previously)
+
+#Lines (Need lines for the EqualSig model)
+
+mu.ML_Batch1_EqualSig.Weibull <- beta.0
+se_mu.ML_Batch1_EqualSig.Weibull <- se_beta.0
+mu.ML_Batch4_EqualSig.Weibull <- beta.0 + beta.1
+se_mu.ML_Batch4_EqualSig.Weibull <- sqrt(fit_3$var[1,1] + fit_3$var[2,2] + (2*fit_3$var[1,2]))
+mu.ML_Batch5_EqualSig.Weibull <- beta.0 + beta.2
+se_mu.ML_Batch5_EqualSig.Weibull <- sqrt(fit_3$var[1,1] + fit_3$var[3,3] + (2*fit_3$var[1,3]))
+
+#Transformers (already established Weibull transformers in a previous code chunk)
+
+#ggplot
+
+cols <- c("Batch 1"="red","Batch 4"="blue","Batch 5"="green")
+
+ggplot() + geom_point(data = CDF_Batch1.df, aes(x = Strength, y = p, color = "Batch 1")) + geom_abline(aes(
+  intercept = (-mu.ML_Batch1_EqualSig.Weibull / sigma.EqualSig),
+  #y-axis intercept
+  slope = 1 / sigma.EqualSig
+, color = "Batch 1")) + geom_point(data = CDF_Batch4.df, aes(x = Strength, y = p, color = "Batch 4")) + geom_abline(aes(
+  intercept = (-mu.ML_Batch4_EqualSig.Weibull / sigma.EqualSig),
+  #y-axis intercept
+  slope = 1 / sigma.EqualSig
+, color = "Batch 4")) + geom_point(data = CDF_Batch5.df, aes(x = Strength, y = p, color = "Batch 5")) + geom_abline(aes(
+  intercept = (-mu.ML_Batch5_EqualSig.Weibull / sigma.EqualSig),
+  #y-axis intercept
+  slope = 1 / sigma.EqualSig
+, color = "Batch 5")) + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Strength",
+  breaks = c(5, 10, 20, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = c(
+    0.00003,
+    0.0001,
+    0.0002,
+    0.0005,
+    0.001,
+    0.003,
+    0.01,
+    0.02,
+    0.05,
+    0.1,
+    0.2,
+    0.5,
+    0.7,
+    0.9
+  )
+)  + ggtitle(expression(paste("Weibull Probability Plot (Equal ", sigma,")"))) + scale_color_manual(name =
+                                                                       "Batch", values = cols)
+
+```
+
+A likelihood ratio test comparing the model in the previous section (separate distributions) with the model in this section (equal $\sigma$) gives a p-value of 0.609, which indicates that we do not have enough evidence to say that the models are different. Hence, it is reasonable to choose the model with the lower number of parameters i.e the one with equal $\sigma$. 
+
+We can conduct pairwise comparisons using the equal $\sigma$ model. We conducted such pairwise comparisons for the median (50% quantile) in the previous section. In the equal $\sigma$ model, we are not limited to any particular quantile for such comparisons. Since the lines in the Weibull plot are parallel, the difference between the batches at any quantile is going to be the same.
+
+Table 5 below shows the estimate of the difference between any two batches along with the standard error and simultaneous confidence intervals^[Bonferroni method used for adjusting the Type 1 error rate for constructing simultaneous CIs]. The simultaneous confidence intervals for the difference between batches 1 and 4 and batches 1 and 5, both do no contain zero. Thus, we have evidence that batches 1 and 4 are different to each other and so are batches 1 and 5, at the 10% significance level. We cannot say the same for the comparison between batches 4 and 5. 
+
+
+```{r Any quantile difference Bonferroni, echo=FALSE, tab.cap="Estimates of difference between batches at any quantile"}
+diffInlogMedian_41 <- fit_3$coefficients[2] #Use a positive difference i.e. don't do Op1 - Op2. You can do it if you want, but the delta will be negative, and both CI limits will be -ve as well. Interpretation will be slightly tricky. Thats it.
+se_diffInlogMedian_41 <- sqrt(fit_3$var[2,2])
+diffInlogMedian_41_lowerWald <- diffInlogMedian_41 - (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_41)
+diffInlogMedian_41_upperWald <- diffInlogMedian_41 + (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_41)
+
+diffInlogMedian_51 <- fit_3$coefficients[3]
+se_diffInlogMedian_51 <- sqrt(fit_3$var[3,3])
+diffInlogMedian_51_lowerWald <- diffInlogMedian_51 - (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_51)
+diffInlogMedian_51_upperWald <- diffInlogMedian_51 + (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_51)
+
+diffInlogMedian_54 <- fit_3$coefficients[3] - fit_3$coefficients[2]
+se_diffInlogMedian_54 <- sqrt(fit_3$var[3,3] + fit_3$var[2,2] - (2*fit_3$var[2,3]))
+diffInlogMedian_54_lowerWald <- diffInlogMedian_54 - (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_54)
+diffInlogMedian_54_upperWald <- diffInlogMedian_54 + (qnorm(1-((0.1/3)/2))*se_diffInlogMedian_54)
+
+delta_median.df <- data.frame(Delta = c("$\\Delta_{41}$", "$\\Delta_{51}$", "$\\Delta_{54}$"),
+                              Estimate = c(diffInlogMedian_41, diffInlogMedian_51, diffInlogMedian_54),
+                              Std.Error = c(se_diffInlogMedian_41, se_diffInlogMedian_51, se_diffInlogMedian_54),
+                              lower.CI = c(diffInlogMedian_41_lowerWald, diffInlogMedian_51_lowerWald, diffInlogMedian_54_lowerWald),
+                              upper.CI = c(diffInlogMedian_41_upperWald, diffInlogMedian_51_upperWald, diffInlogMedian_54_upperWald))
+
+colnames(delta_median.df) <- c("Delta", "ML Estimate", "Standard Error", "Simulataneous approximate 90% CI (Lower)", "Simulataneous approximate 90% CI (Upper)")
+
+n <- knitr::kable(delta_median.df, align = rep('c', 5), table.envir = 'table*', escape = FALSE, digits = 3) %>%
+ kableExtra::kable_styling("striped", full_width = T, position = "left") 
+n
+
+
+```
+
+# Conclusion
+
+In this case study, the question of interest was to find out if there is any difference in the bond strength of wire bonds produced in three separate batches. We approached this problem initially by fitting separate Weibull distributions to all three batches and then by fitting a model with a constant $\sigma$ parameter. Since the likelihood ratio test comparing the two approaches revealed an insignificant p-value, and since the mode of failure in all three batches is the same, we were justified in using a simpler model with fewer parameters. The results of the analysis revealed that there is evidence in the data to suggest that Batch 1 is different to Batches 4 and 5, at the 10% significance level. We did not find any evidence (again, at the 10% significance level) that there is any difference between batches 4 and 5. 
+
+# Acknowledgements
+
+1. Most of what I have learnt about time-to-event analysis is from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger) and Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual).
+
+2. All analyses were performed using R Statistical Software(v4.4.1; R Core Team 2024). The *survival* R package(v3.7.0; Therneau T 2024) was extensively used. Please refer to next section for all the packages used, their versions and the names of the package developers.
+
+3. This article's format is a style that Edward Tufte uses in his books and handouts. 
+
+# Credits for R packages used
+
+```{r echo=FALSE}
+report::cite_packages()
+```
+
+# End
+
+I hope you found this article informative! If you have any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at shishir909@gmail.com.
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
