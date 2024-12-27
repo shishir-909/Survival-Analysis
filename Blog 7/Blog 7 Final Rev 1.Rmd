@@ -37,7 +37,7 @@ setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/In
 
 Applications involving comparison of time-to-failure data from different groups are common in the fields of reliability and manufacturing. For example, a designer might want to implement a new design to reduce costs, but wants to make sure that this change does not adversely affect the reliability of the product. Or, a manufacturer might want to find out if there is any difference in the time-to-failure of products manufactured from different batches or different assembly lines. Parametric and non-parametric methods to compare failure time distributions can be used for such purposes. Two of my previous blog articles([**here**](https://rpubs.com/shishir909/1199328) and [**here**](https://rpubs.com/shishir909/1226309)) dealt with non-parametric methods for comparing failure data. In this article, I demonstrate the use of a parametric method for the same purpose.
 
-I have not included any R code within the article, but they are available on my Github page and can be accessed [**here**](https://github.com/shishir-909/Survival-Analysis/blob/36195c6f99109c607f089d51bcfcb063a0ce681e/Blog%207/Blog%207%20Final.Rmd).
+I have not included any R code within the article, but they are available on my Github page and can be accessed [**here**](https://github.com/shishir-909/Survival-Analysis/blob/fc11ea5686d1eca65f4b8f3a3950343edffff037/Blog%207/Blog%207%20Final%20Rev%201.Rmd).
 
 # Data
 
