@@ -25,7 +25,13 @@ options(htmltools.dir.version = FALSE)
 
 # Introduction
 
-Manufacturers conduct life tests on newly designed products before releasing to the market. The test can help in identifying any potential weakness 
+Product manufacturers conduct life tests on newly designed products before releasing it to the market. The test can help in identifying any potential weaknesses and failure modes, estimate the product lifespan, ensure the product is safe and meets any regulatory standards. Estimating the lifespan is particularly important since it allows manufacturers to set appropriate warranty periods.
+
+Conducting a life test takes time and requires spending of resources (samples for testing, testing apparatus, test operators etc). A carefully planned life test avoids inefficiencies while ensuring that the question of interest is addressed by the life test to the degree that satisfies the requirements. For example, suppose that the purpose of the life test is to estimate the time by which 10% of the products are expected to fail i.e 10% quantile $t_{0.1}$. A life test that results in the 90% confidence interval for $t_{0.1}$ as lying between 100 hours and 50,000 hours is not a ery useful result, since the confidence interval is too wide for any practical use.   
+
+"From the life test, we are 90% confident that the 10% quantile $t_{0.1}$ is in the interval [100 hours, 50000 hours]" 
+
+requires time and resources. Careful planning of such tests avoids 
 
 ```{r bib, include=FALSE}
 # create a bib file for the R packages used in this document
