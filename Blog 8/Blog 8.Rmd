@@ -27,15 +27,22 @@ options(htmltools.dir.version = FALSE)
 
 Product manufacturers conduct life tests on newly designed products before releasing it to the market. The test can help in identifying any potential weaknesses and failure modes, estimate the product lifespan, ensure the product is safe and meets any regulatory standards. Estimating the lifespan is particularly important since it allows manufacturers to set appropriate warranty periods.
 
-Conducting a life test takes time and requires spending of resources (samples for testing, testing apparatus, test operators etc). A carefully planned life test avoids inefficiencies while ensuring that the question of interest is addressed by the life test to the degree that satisfies the requirements. For example, suppose that the purpose of the life test is to estimate the time by which 10% of the products are expected to fail i.e 10% quantile $t_{0.1}$. A life test that results in the 90% confidence interval for $t_{0.1}$ as lying between 100 hours and 50,000 hours is not a very useful result since the confidence interval is too wide for any practical use. A larger number of samples, or longer tests would have helped in reducing the width of the confidence interval^[Width of the confidence interval can be thought of as the precision of the estimate of the quantity of interest.]
+Conducting a life test takes time and requires spending of resources (samples for testing, testing apparatus, test operators etc). A carefully planned life test avoids inefficiencies while ensuring that the question of interest is addressed by the life test to the degree that satisfies the requirements. For example, suppose that the purpose of the life test is to estimate the time by which 10% of the products are expected to fail i.e 10% quantile $t_{0.1}$. A life test that results in the 90% confidence interval for $t_{0.1}$ as lying between 100 hours and 50,000 hours is not a very useful result since the confidence interval is too wide for any practical use. A larger number of samples, or a longer life test would have helped in reducing the width of the confidence interval^[Width of the confidence interval can be thought of as the precision of the estimate of the quantity of interest.]
 
 This leads to the following considerations required to plan a life test
 
-1. How precisely do I want to estimate a quantity^[The quantity to estimate could be a quantile or proportion failing or shape parameter]?
-2. How many samples do I need to test?
-3. How long should the test last?
+1. How many samples do I need to test in order to estimate a quantity with a desired precision^[The quantity to estimate could be a quantile or proportion failing or shape parameter]?
+2. How long should the test last?
 
-In the following article, I discuss an example of how to plan a life test for an engine piston. 
+In the following article, I discuss life test planning using an example of an engine piston.
+
+# Engine Piston
+
+Suppose a manufacturer of an engine piston has developed a new design and wants to conduct a life test. The aim is to estimate the 10% quantile ^[The time by which 10% of the population of the newly designed pistons will fail]. The manufacturer will accept a precision factor of 2. The other constraint is that the manufacturer needs to complete the test within 150 hours. 
+
+What does this precision factor of 2 actually represent?
+
+Lets start with the formula for 
 
 "From the life test, we are 90% confident that the 10% quantile $t_{0.1}$ is in the interval [100 hours, 50000 hours]" 
 
