@@ -35,7 +35,7 @@ This leads to the following considerations required to plan a life test
 1. How many samples do I need to test in order to estimate a quantity with a desired precision?
 2. How long should the test last?
 
-Introductory books on statistics describe estimation of sample size when the mean of a normal distribution is to be estimated for complete data i.e no censoring. In reliability applications, we usually have censored data, and the distributions are not necessarily normal.^[Typical lifetime distributions are Weibull and log-normal.] 
+Introductory books on statistics include formulas to estimate sample size when the mean of a normal distribution is to be estimated for complete data i.e no censoring. In reliability applications, we usually have censored data, and the distributions are not necessarily normal.^[Typical lifetime distributions are Weibull and log-normal.] 
 
 In the following article, I discuss a hypothetical scenario where a manufacturer wants to conduct a life test for a newly designed component where we expect data from the test to be censored^[Which means that the test will not run until all the samples fail].
 
