@@ -21,32 +21,157 @@ library(tufte)
 # invalidate cache when the tufte version changes
 knitr::opts_chunk$set(cache.extra = packageVersion('tufte'))
 options(htmltools.dir.version = FALSE)
+library(RSplida)
 ```
 
 # Introduction
 
 Product manufacturers conduct life tests on newly designed products before releasing it to the market. The test can help in identifying any potential weaknesses and failure modes, estimate the product lifespan, ensure the product is safe and meets any regulatory standards. Estimating the lifespan is particularly important since it allows manufacturers to set appropriate warranty periods.
 
-Conducting a life test takes time and requires spending of resources (samples for testing, testing apparatus, test operators etc). A carefully planned life test avoids inefficiencies while ensuring that the question of interest is addressed by the life test to the degree that satisfies the requirements. For example, suppose that the purpose of the life test is to estimate the time by which 10% of the products are expected to fail i.e 10% quantile $t_{0.1}$. A life test that results in the 90% confidence interval for $t_{0.1}$ as lying between 100 hours and 50,000 hours is not a very useful result since the confidence interval is too wide for any practical use. A larger number of samples, or a longer life test would have helped in reducing the width of the confidence interval^[Width of the confidence interval can be thought of as the precision of the estimate of the quantity of interest.]
+Conducting a life test takes time and resources (samples for testing, testing apparatus, test operators etc). A carefully planned life test avoids inefficiencies while ensuring that the question of interest is addressed by the life test to the degree that satisfies the requirements. For example, suppose that the purpose of the life test is to estimate the time by which 10% of the products are expected to fail i.e 10% quantile $t_{0.1}$. A life test that results in the 90% confidence interval for $t_{0.1}$ as lying between 100 hours and 50,000 hours is not a very useful result since the confidence interval is too wide for any practical use. A larger number of samples and/or a longer life test would have helped in reducing the width of the confidence interval^[Width of the confidence interval can be thought of as the precision of the estimate of the quantity of interest.]
 
 This leads to the following considerations required to plan a life test
 
-1. How many samples do I need to test in order to estimate a quantity with a desired precision^[The quantity to estimate could be a quantile or proportion failing or shape parameter]?
+1. How many samples do I need to test in order to estimate a quantity with a desired precision?
 2. How long should the test last?
 
-In the following article, I discuss life test planning using an example of an engine piston.
+Introductory books on statistics describe estimation of sample size when the mean of a normal distribution is to be estimated for complete data i.e no censoring. In reliability applications, we usually have censored data, and the distributions are not necessarily normal.^[Typical lifetime distributions are Weibull and log-normal.] 
 
-# Engine Piston
+In the following article, I discuss a hypothetical scenario where a manufacturer wants to conduct a life test for a newly designed component where we expect data from the test to be censored^[Which means that the test will not run until all the samples fail].
 
-Suppose a manufacturer of an engine piston has developed a new design and wants to conduct a life test. The aim is to estimate the 10% quantile ^[The time by which 10% of the population of the newly designed pistons will fail]. The manufacturer will accept a precision factor of 2. The other constraint is that the manufacturer needs to complete the test within 150 hours. 
+# Mechanical Seal
+
+Suppose a manufacturer of mechanical seals has developed a new design and wants to conduct a life test. The aim is to estimate the 5% quantile ^[The time by which 5% of the population of the newly designed seals will fail]. The manufacturer will accept a precision factor of 2. The maximum duration that the manufacturer can test the seal is 4000 hours^[This is a very long test and does not happen in practice. Usually, life tests are accelerated by subjecting the newly designed product to conditions harsher than what would be expected on the field, which helps in reducing the duration of the life test. For this blog, we assume that there is no acceleration and that the manufacturer is willing to test the product in conditions similar to actual conditions]. 
 
 What does this precision factor of 2 actually represent?
 
-Lets start with the formula for 
+To answer this question, we will start with the formula for the 100(1-$\alpha$)% confidence interval for $log(t_{p})$, where $t_{p}$ is the $p^{th}$ quantile of the time to failure distribution^[Recollect that $log(t_{p}) = \mu + \Phi^{-1}(p)\sigma$ in the log-location scale representation].
 
-"From the life test, we are 90% confident that the 10% quantile $t_{0.1}$ is in the interval [100 hours, 50000 hours]" 
+$$
+CI\left[log(t_{p})\right] = log(\hat{t_{p}}) \pm z_{1-\alpha/2}\sqrt{\hat{Var}(log(\hat{t_{p}})}
+\tag{A}
+$$
+where $z_{k}$ is the $k^{th}$ quantile of the standard normal distribution. This gives the confidence interval of ${t_{p}}$ as
 
-requires time and resources. Careful planning of such tests avoids 
+$$
+CI[(t_{p})] = [\hat{t_{p}}/\hat{R},\hat{t_{p}}\hat{R}]
+\tag{B}
+$$
+
+where
+$$
+\hat{R} = exp\left(z_{1-\alpha/2}\sqrt{\hat{Var}(log(\hat{t_{p}})})\right)
+\tag{C}
+$$
+
+
+$\hat{R}$, which is greater than 1, quantifies the precision of $t_{p}$.^[Larger values of R results in a wider confidence interval in equation B, thereby lowering the precision.] 
+
+The manufacturer of the mechanical seal wants to estimate $t_{0.1}$ and will accept a precision factor of 2.
+
+# Planning Values
+
+In order to find the sample size or to assess the effect of a particular sample size on the precision of an estimate, we need some planning information. This information is obtained from the engineers based on past experience with similar products, knowledge of failure mechanisms, expert opinions etc. The planning information consists of the distribution describing the time to failure, and the parameter values from past testing of similar products or from publications/industry information. Suppose the manufacturer provides this information as follows: distribution of the time to failure for the mechanical seal is expected to follow a Weibull distribution with an $\eta$ value of 25,000 hours and $\beta$ value of 1.4. In the log-location scale representation, this translates to a $\mu$ value of 11.225 and $\sigma$ value of 0.714.^[$\mu = log(\eta)$ and $\sigma = 1/\beta$].
+
+```{r include=FALSE}
+eta <- 25000
+beta <- 1.4
+mu <- log(eta)
+sigma <- 1/beta
+p <- 0.05
+
+tp <- exp(mu + (qsev(p)*sigma))
+
+tc <- 4000
+```
+
+
+# Sample size 
+
+With a given target precision $R_{T}$, we rewrite equation D as follows
+
+$$
+\begin{align*}
+R_{T}  & = exp\left(z_{1-\alpha/2}\sqrt{\frac{\hat{\sigma_{plan}}^{2}}{n}V_{y_{p}}}\right)
+\end{align*}
+\tag{C}
+$$
+where $V_{y_{p}}$^[$y_{p} = log(t_{p})$] is the variance factor for the $p^{th}$ quantile, to be discussed in the next section. Rearranging the above formula, we get
+
+$$
+n = \frac{z^{2}_{1-\alpha/2}(\sigma^{2}_{plan})V_{\hat{y_{p}}}}{\left[log(R_{T})\right]^{2}}
+\tag{D}
+$$
+
+where $\sigma_{plan}$ is the planning value we received from the manufacturer and $R_{T}$ is the target precision. We already have both these values. The next section discusses the variance factor $V_{\hat{y_{p}}}$.
+
+# Variance factor for a quantile
+
+The variance factor $V_{\hat{y_{p}}}$ is given by $(\frac{n}{\sigma^{2}}Avar(\hat{y_{p}}))$
+Charts and tables are available in the literature for the variance factors for different quantiles for some distributions like Weibull and log-normal. Anyone interested in exploring this further can refer to the paper by Meeker and Nelson(1976)^[Meeker, W. Q. and W. B. Nelson (1976). Weibull percentile estimates and confidence limits from singly censored data by maximum likelihood. IEEE Transactions on Reliability 25, 20–24.]. This paper presents the asymptotic theory, tables and figures to plan a life test to estimate a Weibull quantile. The steps followed in the paper can be repeated for distributions other than Weibull(Eg: log-normal). The results are in a chart and tabular format. In a nutshell, the paper uses the inverse of the expected Fisher information matrix as an estimate of the covariance matrix of the maximum likelihood estimates (MLE) for calculating the variance factors.^[As opposed to the inverse of the observed Fisher information matrix. We don't have any observed data before the test, so we cannot calculate the observed Fisher information. But, given the planning information and the expected proportion failing by the end of test, we can calculate the expected Fisher information.] The package **Rsplida** in R, authored by Dr Meeker, has functions that give the values of the the variance factor for a given quantile of interest (5% in our case) for some of the commonly used distributions in reliablity applications. 
+
+In order to find the variance factor, we will first need to find the expected proportion of seals failing by the end of the test i.e 4000 hours. That is, we need to solve for $p$ in the following equation:
+
+$$
+log(t_{c}) = \mu + \Phi^{-1}_{SEV}(p)\sigma
+$$
+where $t_{c}$ is the censoring time, which is the duration of the test. The manufacturer can test to a maximum fo 4000 hours, so $t_{c}$ is 4000 hours. $\mu$ and $\sigma$ are the planning values and $\Phi_{SEV}$ is the CDF of the standard smallest extreme value distribution.  
+
+```{r}
+prop.failing <- psev((log(4000) - mu)/sigma)
+V.yp <- varianceFactorQuantile(0.05,prop.failing,"sev")
+```
+
+The expected proportion of seals failing by 4000 hours is `r prop.failing` and the variance factor for the 5% quantile is `r V.yp`. 
+
+```{r include=FALSE}
+n <- (qnorm(0.95)**2)*(sigma**2)*V.yp/(log(2)**2)
+n <- ceiling(n)
+```
+
+Plugging these values in equation D, the sample size (90% confidence) for a life test for estimating the 5% quantile of the life of the newly designed mechanical seal with a precision of 2, is `r n` samples.
+
+Suppose the manufacturer wants to reduce the duration of the test to 3000 hours instead of 4000 hours. How much will this impact the precision? We can use equation C to calculate the precision when the test is to be terminated at 3000 hours. 
+
+First, we will need to find the variance factor again, which will require the calculation of the expected fraction failing at 3000 hours.
+
+```{r}
+prop.failing <- psev((log(3000) - mu)/sigma)
+V.yp <- varianceFactorQuantile(0.05,prop.failing,"sev")
+```
+
+The expected proportion of seals failing by 3000 hours is `r prop.failing` and the variance factor for the 5% quantile is `r V.yp`. Plugging this value into equation C will give us the precision.
+
+```{r}
+R <- exp(qnorm(0.95)*sqrt((sigma**2)*V.yp/n))
+R <- round(R,3)
+```
+
+The calculated precision is `r R`. This is higher than the target precision of 2. This is the trade off between savings due to reduced test duration and the increased width of the confidence interval (reduced precision). If the manufacturer wants to keep a precision of 2, an alternate option is to increase the sample size.^[The $t_{0.05}$ using planning values is ~2996 hours. In theory, one can increase the sample size such that we get a target precision of 2, even if we test only till 2000 hours. The disadvantage of this strategy is that we would require extrapolation of results from the life test to $t_{0.05}$, which then becomes sensitive to the choice of the assumed distribution.] 
+
+# Conclusion
+
+This blog article walked through some of the basic steps for estimating the sample size for a life test of a product in order to estimate the 5% quantile. The sample size depends on the required precision of the estimate as well as the test duration. For a more detailed treatment of this problem, I refer you to the book Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual). It includes additional commentary on the approximate large sample variances used in the computation of the variance factors as well as simulation methods for assessing the impact of changing test length or changing the sample size. The book also includes methods for samples size calculation for estimating parameters of a distribution.  
+
+# Acknowledgements
+
+1. Most of what I have learnt about time-to-event analysis is from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger) and Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual).
+
+2. All analyses were performed using R Statistical Software(v4.4.1; R Core Team 2024). The *survival* R package(v3.7.0; Therneau T 2024) was extensively used. Please refer to next section for all the packages used, their versions and the names of the package developers who deserve credit for building these amazing open source packages.
+
+3. This article's format is a style that Edward Tufte uses in his books and handouts. I have used the *tufte* library in R and am grateful to the authors of this package. 
+
+# Credits for R packages used
+
+```{r echo=FALSE}
+report::cite_packages()
+```
+
+# End
+
+I hope you found this article informative! If you have any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at shishir909@gmail.com.
+
+
 
 ```{r bib, include=FALSE}
 # create a bib file for the R packages used in this document
