@@ -1,7 +1,7 @@
 ---
 title: "Prediction Interval and its Calibration"
 runningheader: "Tufte Handout with R Markdown" # only for pdf output
-subtitle: "Reliabilty case study using R" # only for html output
+subtitle: "An Application in Reliability using R Statistical Software" # only for html output
 author: "Shishir Rao"
 date: "`r Sys.Date()`"
 output:
@@ -34,25 +34,25 @@ setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/In
 
 A potential customer would like to know how long will an expensive piece of industrial equipment they intend to purchase operate before failing. A maintenance manager needs to make a decision on whether an operating unit should be shut down and brought in for maintenance or let it run for some more time. A manufacturing company would like to allocate budget for potential warranty claim returns and would like to know the number of product failures in the next 6 months. 
 
-Questions of the above nature can be addressed by analyzing data from past failures and constructing prediction intervals. In this blog article, we will discuss prediction intervals, how are they different from confidence intervals and why is it necessary to calibrate prediction intervals. The methods discussed in this blog post are from the chapter on prediction intervals in a textbook^[Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] that I have been reading. I highly recommend this book to anyone interested in applying statistical methods in the field of reliability engineering.
+Questions of the above nature can be addressed by analyzing data from past failures and constructing prediction intervals. In this blog article, we discuss prediction intervals, how are they different from confidence intervals and why is it necessary to calibrate prediction intervals. The methods mentioned in this blog post are from a chapter on prediction intervals in a textbook^[Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)] that I have been reading. I highly recommend this book to anyone interested in applying statistical methods in the field of reliability engineering.
 
 # Prediction Intervals vs Confidence Intervals
 
 A prediction interval is an interval within which a future observation is likely to fall, whereas a confidence interval is an interval within which a population parameter is likely to fall. Lets look at this difference with the help of an example.
 
-Suppose there are 1000 houses that are on sale in a particular neighborhood. We are interested in finding out the average sale price of a house in this neighborhood. If we had access to the 1000 sale prices, finding the average is a straightforward exercise. Now suppose that only 50 have been sold so far and we want to use this data to estimate the average sale price of the 1000 houses in the neighborhood. 
+Suppose there are 1000 houses that are on sale in a particular neighborhood. We are interested in finding out the average sale price of a house. If we had access to the 1000 sale prices, finding the average is a straightforward exercise. Now, suppose that only 50 have been sold so far and we want to use this data to estimate the average sale price of the 1000 houses in the neighborhood. 
 
 In the above example, our sample size is 50 and the population size is 1000. The population parameter that we want to estimate is the mean (or average) of 1000 homes ^[Other quantities like the median or any other quantile are also population parameters]. This population parameter is an unknown quantity, but it is fixed!^[We are talking about the frequentist approach. In the Bayesian approach, parameters are also treated as random quantities.] We can use the 50 sale prices to construct a confidence interval for the mean of 1000 sale prices. 
 
-On the other hand, suppose we want to know the price range within which the next house that sells is going to fall in. This range would be the prediction interval. Note that the sale price of the next house that is sold is a random quantity, unlike the unknown population parameter which is fixed. The prediction that we are interested in is an "unknown and random" quantity whereas the average sale price of a house in the neighborhood is an "unknown but fixed" quantity. Confidence intervals are constructed for "unknown but fixed" population parameters^[Like the mean in this case] and prediction intervals are constructed for the "unknown and random" quantity^[Sale price of the next house sold in this case.]  
+On the other hand, suppose we want to know the price range within which the next house that sells is going to fall in. This range would be the prediction interval. Note that the sale price of the next house that is sold is a random quantity, unlike the unknown population parameter which is fixed. The prediction that we are interested in is an "unknown and random" quantity whereas the average sale price of a house in the neighborhood is an "unknown but fixed" quantity. Confidence intervals are constructed for "unknown but fixed" population parameters^[Like the mean in this case] and prediction intervals are constructed for the "unknown and random" quantity.^[Sale price of the next house sold in this case.] Te rest of this article discusses prediction intervals and how to calibrate them.
 
 # Reliability Applications
 
-Similar to the example of house sale prices, consider a scenario where a customer wants to purchase an expensive piece of industrial equipment and is interested in the prediction interval for that particular equipment. The confidence interval would give the customer an idea of the mean time to failure of all identical equipment manufactured in the past, present and future by the manufacturer. Although this is good information to have, the customer wants an interval for one equipment. This interval, which is the prediction interval, accounts for individual variability in the time-to-failure. 
+Similar to the example of house sale prices, consider a scenario where a customer wants to purchase an expensive piece of industrial equipment and is interested in the prediction interval for that particular equipment. The confidence interval would give the customer an idea of the mean time to failure of all identical equipment manufactured in the past, present and future. Although this is good information to have, the customer wants an interval for one equipment, which would also account for the individual variability in addition to the uncertainty in estimating a parameter. Due to this additional variability, the prediction intervals are wider than confidence intervals. 
 
-We can still use data from historical failures to get a prediction interval for an equipment. The difference between this case and the previous example of house prices is that historical data from equipment failures may be incomplete. This means that in addition to failures, the data might consist of censored observations, where the equipment hasn't failed by the end of the observation period^[This is for right censored observations. We can also have left or interval censored observation and even truncated observations in reliability data.].
+We can use data from historical failures to get a prediction interval for an equipment. The difference between this case and the previous example of house prices is that historical data from equipment failures may be incomplete. This means that in addition to failures, the data might consist of censored observations, where the equipment hasn't failed by the end of the observation period^[This is for right censored observations. We can also have left or interval censored observation and even truncated observations in reliability data.].
 
-In the following article, a dataset consisting of past failures (and censored) observations will be used to construct a prediction interval. It will then be calibrated to ensure adequate coverage probability^[Will be discussed later in the article]. All computations are performed using R.
+In the following article, a dataset consisting of past failures (and censored) observations will be analyzed to construct a prediction interval. It will then be calibrated to ensure adequate coverage probability^[Will be discussed later in the article]. All computations are performed using R and the code is available [**here**](https://github.com/shishir-909/Survival-Analysis/blob/110b5a7735fb2f6e82aac9102ccfda336d3ca350/Blog%209/Blog%209.Rmd).
 
 # Case Study: Mechanical Switches
 
@@ -89,7 +89,7 @@ $$
 
 The distribution of $\Phi$ determines the time-to-failure distribution. For example, if $t$ is assumed to have a Weibull distribution, $\Phi$ is the cumulative distribution function (CDF) of the standard smallest extreme value (SEV) distribution. Similarly, if $t$ is assumed to have a log-normal distribution, then $\Phi$ is the CDF of the standard normal distribution.
 
-Weibull and log-normal distributions are widely used to describe time-to-failure distributions in reliability applications. Other distributions^[Eg: exponential, log-logistic, generalized gamma, normal etc] can also be considered, depending on the application and motivated by the failure process. In the interest of brevity, only log-normal and Weibull distributions are considered as candidate models in this article.
+Weibull and log-normal distributions are widely used to describe time-to-failure distributions in reliability applications. Other distributions^[Eg: exponential, log-logistic, generalized gamma, normal etc] can also be considered, depending on the application and motivated by the failure process. Only log-normal and Weibull distributions are considered as candidate models in this article.
 
 Figure 1 shows a Weibull probability plot and Figure 2 shows a log-normal probability plot of the mechanical switches dataset.
 
@@ -295,10 +295,10 @@ gg.logNormal
 
 ```
 
-The log-normal model looks like a better fit to the data as compared to the Weibull model, especially at the lower tail. The AIC of the Weibull model is `r AIC.weibull` and the AIC of the log-normal model is `r AIC.lognormal`, further reinforcing that the log-normal is a better choice for this data. The estimates of the parameters of the log-normal distribution and their standard errors are shown in the table 2 below. 
+The log-normal model looks like a better fit to the data as compared to the Weibull model, especially at the lower tail. The AIC of the Weibull model is `r AIC.weibull` and the AIC of the log-normal model is `r AIC.lognormal`, further reinforcing that the log-normal is a better choice for this data. The maximum likelihood (ML) estimates of the parameters of the log-normal distribution and their standard errors are shown in the table 2 below. 
 
 
-```{r echo=FALSE, tab.cap="Table 2. Maximum Likelihood estimates of the log-normal model"}
+```{r ML estimates table, echo=FALSE, tab.cap="Table 2. Maximum Likelihood estimates of the log-normal model"}
 ML_estimates <- data.frame(c(mu.ML_logNormal,
                              se_mu.ML_logNormal,
                              sigma.ML_logNormal,
@@ -313,34 +313,35 @@ knitr::kable(ML_estimates, align = rep('c', 1), table.envir = 'table*', escape =
 
 ## Plug-in Prediction Interval
 
-```{r}
+```{r Plug-in interval}
 T.tilda.lower <- round(exp(mu.ML + (qnorm(0.05)*sigma.ML)),2)
 T.tilda.upper <- round(exp(mu.ML + (qnorm(0.95)*sigma.ML)),2)
 
 #The 2 sided 90% prediction interval is (T.tilda.lower, T.tilda.upper)
 ```
 
-Now that we have the ML (maximum likelihood) estimates of the log-normal distribution parameters, we can easily obtain the 90% approximate^[As opposed to an "exact" prediction interval where the confidence level is exactly met.] prediction interval. A one sided lower 95% approximate prediction bound and a one sided upper 95% approximate prediction bound are combined to form an equal tailed two sided 90% approximate prediction interval.^[Although it might be possible to find a narrower interval with unequal upper and lower tail probabilities that add to $\alpha$ = 10%, it is still advantageous to report an interval that can be correctly interpreted as one-sided prediction bounds with the appropriate adjustment to the confidence level.] This is calculated as [`r T.tilda.lower`,`r T.tilda.upper`].
+Now that we have the ML estimates of the log-normal distribution parameters, we can easily obtain the 90% approximate^[As opposed to an "exact" prediction interval where the confidence level is exactly met.] prediction interval. A one sided lower 95% approximate prediction bound and a one sided upper 95% approximate prediction bound are combined to form an equal tailed two sided 90% approximate prediction interval. Although it might be possible to find a narrower interval with unequal upper and lower tail probabilities that add to $\alpha$ = 10%, two-sided intervals are often reported in reliability applications even when the primary interest is on one side or the other. With the appropriate adjustment to the confidence level, a two-sided interval can be correctly interpreted as a one-sided prediction bound. 
+For the mechanical switches, a two sided approximate 90% prediction interval calculated using the ML estimates of the parameters is [`r T.tilda.lower`,`r T.tilda.upper`].
 
 ## Calibrating Prediction Intervals
 
 The method of finding the approximate prediction interval described in the previous section is a "naive" method because it simply uses the ML estimates of the parameters. It ignores the uncertainty in the estimated parameter values, which then leads to the coverage probability^[Coverage probability is the probability that a prediction interval procedure gives an interval containing the future prediction.] being generally smaller than the nominal confidence level. When there is a lot of information in the data set i.e large number of failures and little censoring, the naive plug-in method may suffice. If this is not the case, it is necessary to refine/calibrate the interval to ensure better coverage probability. 
 
-Escobar and Meeker (1999)^[Escobar, L. A. and W. Q. Meeker (1999). Statistical prediction based on censored life data. *Technometrics 41*, 113–124.], discuss different prediction interval calibration methods in their paper. Out of these, we will use the method where calibration is done by simulating *B*^[*B* is typically chosen between 10,000 and 50,000.] realizations of the data and averaging the conditional coverage probabilities. A comprehensive discussion on this method is outside the scope of this blog article. I would encourage you to read the paper or the textbook that I have mentioned previously. I will summarize the steps involved in this method below as an aid. 
+Escobar and Meeker (1999)^[Escobar, L. A. and W. Q. Meeker (1999). Statistical prediction based on censored life data. *Technometrics 41*, 113–124.], discuss different prediction interval calibration methods in their paper. Here, we use the method where calibration is done by simulating *B*^[*B* is typically chosen between 10,000 and 50,000.] realizations of the data and averaging the conditional coverage probabilities. A comprehensive discussion on this method is outside the scope of this blog article and I encourage you to read the paper or the textbook that I have mentioned previously. A summary of the steps involved in this method is shown below: 
 
-*Step 1*: Choose a particular value of the one sided confidence level $1 - \alpha_{c}$. In our case study, the one sided confidence level is 5%. So we can start with $\alpha_{c} = 0.05$.\
-*Step 2*: Simulate a realization of the available data using fractional random weight bootstrap sampling^[Note on fractional random weight bootstrap method is at the end of this blog.].\ 
+*Step 1*: Choose a particular value of the one sided confidence level $1 - \alpha_{c}$. In our case study, the one sided confidence level is 5%. So, we can start with $\alpha_{c} = 0.05$.\
+*Step 2*: Simulate a realization of the available data using fractional random weight bootstrap^[Note on fractional random weight bootstrap method is included in the next section.] sampling.\
 *Step 3*: Find the maximum likelihood estimates of the distribution parameter for the data simulated in Step 2.\
 *Step 4*: Find the one sided upper 95% prediction interval from the parameter estimates in step 3.\
-*Step 5*: Find the coverage probability of the interval from Step 4 using the original ML estimates of the parameters (which we found from the original data).\
+*Step 5*: Find the coverage probability of the interval from Step 4 using the original ML estimates of the parameters in Table 2.\
 *Step 6*: Repeat Steps 2,3,4 and 5 $B$ times. $B = 10,000$ has been used in this case.\
 *Step 7*: Take the average of the 10,000 coverage probabilities from Step 5. If this value is less than our target confidence level of 95%, decrease the value of $\alpha_{c}$ in Step 1 and repeat the whole procedure until the average in Step 7 is at or above our target confidence level.\
 
-The above procedure will give us a calibrated one sided 95% prediction interval. Repeat the same procedure to find the calibrated one sided lower 95% prediction interval by modifying Step 4 to calculate the lower bound instead of the upper bound.
+The above procedure will give us a calibrated one sided approximate 95% upper prediction bound. Repeat the same procedure to find the calibrated one sided approximate 95% lower prediction bound by modifying Step 4 to calculate the lower bound instead of the upper bound.
 
-Table 3 below shows the calibrated interval along with the naive plug in interval.
+Combining the two one-sided 95% bounds gives a two-sided 90% interval. Table 3 below shows the calibrated interval along with the naive plug in interval.
 
-```{r include=FALSE}
+```{r Calibration, include=FALSE}
 start.time <- Sys.time()
 B <- 10000
 n <- nrow(MechanicalSwitch)
@@ -390,7 +391,7 @@ end.time - start.time
 ```
 
 
-```{r, tab.cap="Table 3: 90% Approximate Prediction Intervals"}
+```{r Prediction final table, tab.cap="Table 3: Approximate 90% Prediction Intervals"}
 pred.int.df <- data.frame(naive = paste0("[",T.tilda.lower,", ",T.tilda.upper,"]"),
                           calibrated = paste0("[",T.tilda.lower.calib.FRW,", ",T.tilda.upper.calib.FRW,"]"))
 
@@ -400,15 +401,17 @@ knitr::kable(pred.int.df, align = rep('c', 2), table.envir = 'table*', escape = 
  kableExtra::kable_styling("striped", full_width = T, position = "left") 
 ```
 
-Notice that the width of the calibrated interval is greater than the width of the naive interval. The calibrated approximate prediction interval has better coverage properties than the naive approximate prediction interval.
+Notice that the width of the calibrated interval is greater than the width of the naive interval. The calibrated approximate prediction interval is expected to have better coverage properties than the naive approximate prediction interval.
 
 ## Note on Fractional Random Weight Bootstrap
 
-With a traditional bootstrap approach, we randomly sample data (from Table 1), with replacement. In a given bootstrap sample, some rows from table 1 may appear more than once while other may not appear at all. Think of the number of times that a particular row appears in a bootstrap sample as a "weight". These weights are integer values and can take on values between 0 and $n$, where $n$ is the number of data points in a bootstrap sample. Note that these weights as positive "integer" values. When there is heavy censoring in the data, a bootstrap sample might consist of only censored observations, or very few failures. This leads to estimation problems when we try to estimate parameters using maximum likelihood. An alternative to these "integer weights" is "fractional weights", where each row in Table 1 gets assigned random non-integer weights. These non-integer weights can be generated from a continuous distribution of a random variable that has the same mean and standard deviation as the integer resampling weights. Xu et al. (2020)^[Xu, L., C. Gotwalt, Y. Hong, C. B. King, and W. Q. Meeker (2020). Applications of the fractional‐random‐weight bootstrap. *The American Statistician 74*, 345–358.] discusses an application of this method as well as shows how to generate the random weights. Although we don't have heavy censoring in our case and would probably not have encountered any estimation problems, we have still used fractional random weight bootstrapping just to be on the safer side.
+With a traditional bootstrap approach, we randomly sample data (from Table 1), with replacement. In a given bootstrap sample, some rows from table 1 may appear more than once while other may not appear at all. Think of the number of times that a particular row appears in a bootstrap sample as the "weight" for that observation. These weights are integer values and can take on values between 0 and $n$, where $n$ is the number of data points in a bootstrap sample. Note that these weights are positive "integer" values. When there is heavy censoring in the data, a bootstrap sample might consist of only censored observations, or very few failures. This leads to estimation problems when we try to estimate parameters using maximum likelihood. An alternative to these "integer weights" is "fractional weights", where each row in Table 1 gets assigned random non-integer weights. These non-integer weights can be generated from a continuous distribution of a random variable that has the same mean and standard deviation as the integer resampling weights. Xu et al. (2020)^[Xu, L., C. Gotwalt, Y. Hong, C. B. King, and W. Q. Meeker (2020). Applications of the fractional‐random‐weight bootstrap. *The American Statistician 74*, 345–358.] discusses an application of this method and shows how to generate the random weights. Although we don't have heavy censoring in our case and would probably not have encountered any estimation problems, we have still used fractional random weight bootstrapping to be on the safer side.
 
 # Conclusion
 
-This blog discussed prediction intervals and how to construct them using an example of a data set that contained time-to-failure of 40 mechanical switches. It also discussed calibration of the interval to account for the uncertainty in the estimates of the distribution parameters. We can say with 90% confidence that the time-to-failure prediction for a future mechanical switch can be expected to fall in the range of [`r T.tilda.lower.calib.FRW`,`r T.tilda.upper.calib.FRW`] millions of operations. 
+In this blog post, we discussed prediction intervals and how to construct them using an example of a data set that contained time-to-failure of 40 mechanical switches. We also touched on the calibration of the interval to account for uncertainty in the estimates of the distribution parameters. Based on the analysis of the mechanical switches dataset, we can say with 90% confidence that the time-to-failure prediction for a future mechanical switch can be expected to fall in the range of [`r T.tilda.lower.calib.FRW`,`r T.tilda.upper.calib.FRW`] millions of operations.
+
+This was a simple application of prediction intervals where all the equipment started testing at time zero and only three were censored observations. The concept here can be used to find prediction intervals for individual equipment that have been operating for different durations and operating under different conditions that would lead to different failure time distributions, using regression analysis. 
 
 # Acknowledgements
 
@@ -420,14 +423,13 @@ This blog discussed prediction intervals and how to construct them using an exam
 
 # Credits for R packages used
 
-```{r echo=FALSE}
+```{r Credits for packages, echo=FALSE}
 report::cite_packages()
 ```
 
 # End
 
 I hope you found this article informative! If you have any comments or suggestions or if you find any errors and are keen to help correct the error, please write to me at shishir909@gmail.com.
-
 
 
 ```{r DO NOT USE, eval=FALSE, include=FALSE}
