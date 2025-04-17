@@ -1,0 +1,732 @@
+---
+title: "Blog 9 preparation"
+output: html_document
+date: "2025-04-12"
+---
+
+```{r Load Libraries}
+library(KMsurv)
+library(survival)
+library(survMisc) ##Confidence bands not in survival package. survMisc is an extension of the survival package and contains confidence bands
+library(tidyverse)
+library(readxl)
+library(readr)
+library(flexsurv)
+library(km.ci)
+library(metR)
+library(WeibullR)
+library(RSplida)
+```
+
+Load data
+
+```{r Load data}
+
+fan <- readr::read_csv("G:\\My Drive\\rao@ualberta.ca 2022-12-08 10 58\\shishir@tamu.edu\\My Drive\\Interesting papers\\Survival Models\\GitHub\\Survival\\Survival-Analysis\\Blog 9\\Data\\Fan.csv")
+
+fan <- fan %>%
+  dplyr::rename(Censor = `Censoring Indicator`,
+                ) %>%
+  dplyr::mutate(delta = case_when(Censor == "Fail" ~ 1,
+                                  Censor == "Censored" ~ 0)) 
+
+
+
+motorA <- readr::read_csv("G:\\My Drive\\rao@ualberta.ca 2022-12-08 10 58\\shishir@tamu.edu\\My Drive\\Interesting papers\\Survival Models\\GitHub\\Survival\\Survival-Analysis\\Blog 9\\Data\\MotorA.csv")
+
+motorA <- motorA %>%
+  dplyr::rename(Censor = `Censoring Indicator`,
+                ) %>%
+  dplyr::mutate(delta = case_when(Censor == "Failed" ~ 1,
+                                  Censor == "Survived" ~ 0)) 
+
+AlloyT7987 <- readr::read_csv("G:\\My Drive\\rao@ualberta.ca 2022-12-08 10 58\\shishir@tamu.edu\\My Drive\\Interesting papers\\Survival Models\\GitHub\\Survival\\Survival-Analysis\\Blog 9\\Data\\AlloyT7987.csv")
+
+AlloyT7987 <- AlloyT7987 %>%
+  dplyr::mutate(delta = ifelse(AlloyT7987$`Censoring Indicator` == "Failed",1,0)) %>%
+  dplyr::rename(Censor = `Censoring Indicator`,
+                Cycles = `Thousands of Cycles`) %>%
+  tidyr::uncount(Count)
+
+```
+
+Fit a log-normal distribution
+
+```{r}
+fit.logNormal <- survival::survreg(Surv(Cycles, delta) ~ 1, data = AlloyT7987, dist = "lognormal")
+
+summary(fit.logNormal)
+
+mu.ML <- fit.logNormal$coefficients
+sigma.ML <- fit.logNormal$scale
+```
+
+Next, get the upper and lower one sided 95% plug in prediction bounds.
+
+```{r}
+T.tilda.lower <- exp(mu.ML + (qnorm(0.05)*sigma.ML))
+T.tilda.upper <- exp(mu.ML + (qnorm(0.95)*sigma.ML))
+
+#The 2 sided 90% prediction interval is (T.tilda.lower, T.tilda.upper)
+```
+
+I am going to simulate using fractional random weight instead of parametric bootstrap and see what I get.
+
+```{r eval=FALSE, include=FALSE}
+start.time <- Sys.time()
+B <- 10000
+n <- nrow(AlloyT7987)
+r <- sum(AlloyT7987$delta)
+mu.B <- c()
+sigma.B <- c()
+
+alpha.c <- 1 - 0.96 #start with alpha.c as "1 - 0.95". Then, play around with it to find a value that gives CP.PI.PB.upper as 0.95. Then repeat process again to find a value that gives CP.PI.FRW.lower as 0.95. The formula for CP.PI.FRW.upper and CP.PI.PB.lower is given below.
+
+i <- 1
+
+while(i <= B){
+  
+  if(i%%1000 == 0){print(i)}
+  
+  #The next 3 lines of code are for generating the fractional random weights for simulation.
+  gamma_randomNumbers <- rgamma(n, shape = 1, rate = 1)
+dirichlet_randomNumbers <- gamma_randomNumbers/sum(gamma_randomNumbers)
+fractional_randomWeights <- n*dirichlet_randomNumbers
+
+fit_B <- survival::survreg(Surv(Cycles, delta) ~ 1, data = AlloyT7987, weights = fractional_randomWeights,dist = "lognormal")
+
+  mu.B[i] <- fit_B$coefficients
+  sigma.B[i] <- fit_B$scale
+  
+  i <- i + 1
+}
+
+  T.tilda.lower.B <- exp(mu.B + (qnorm(alpha.c)*sigma.B))
+  T.tilda.upper.B <- exp(mu.B + (qnorm(1-alpha.c)*sigma.B))
+
+#The next 2 lines of code gives the coverage probability for the upper and lower bounds. See section 3.3 in the paper linked here: https://drive.google.com/open?id=1yqxRGOqa1-FVEou9B8jw89xQSjmYPiij&usp=drive_fs   
+  
+(CP.PI.FRW.upper <- ((1/B)*sum(pnorm((log(T.tilda.upper.B)-mu.ML)/sigma.ML))))
+
+(CP.PI.FRW.lower <- ((1/B)*sum(1-pnorm((log(T.tilda.lower.B)-mu.ML)/sigma.ML))))
+
+  #The calibrated values of the prediction bounds/interval shown below. This depends on the value of alpha.c that gives approx 95% coverage probability. This will be different for the upper and lower bounds. You will have to play around with it. See page 2 in the link here: https://drive.google.com/open?id=1Lf45d_og0teSJCYXarHQp5rxaCOofnSc&usp=drive_fs
+
+T.tilda.lower.calib.FRW <- exp(mu.ML + (qnorm(1-0.96)*sigma.ML))
+T.tilda.upper.calib.FRW <- exp(mu.ML + (qnorm(0.96)*sigma.ML))
+
+
+end.time <- Sys.time()
+
+end.time - start.time
+
+
+```
+
+Alloy T7987 seems to be a good option for the blog.
+
+Try ApplianceCord dataset.
+
+```{r}
+ApplianceCord <- readr::read_csv("G:\\My Drive\\rao@ualberta.ca 2022-12-08 10 58\\shishir@tamu.edu\\My Drive\\Interesting papers\\Survival Models\\GitHub\\Survival\\Survival-Analysis\\Blog 9\\Data\\ApplianceCord.csv")
+
+ApplianceCord <- ApplianceCord %>%
+  dplyr::mutate(delta = ifelse(ApplianceCord$`Censoring Indicator` == "Failed",1,0)) %>%
+  dplyr::rename(Censor = `Censoring Indicator`,
+                Type = `Cord Type`)
+
+ApplianceCord.B6 <- ApplianceCord %>%
+  dplyr::filter(Type == "B6")
+
+ApplianceCord.B7 <- ApplianceCord %>%
+  dplyr::filter(Type == "B7")
+
+ApplianceCord.current <- ApplianceCord.B7
+```
+
+Fit a log-normal distribution
+
+```{r}
+fit.logNormal <- survival::survreg(Surv(Hours, delta) ~ 1, data = ApplianceCord.current, dist = "lognormal")
+
+summary(fit.logNormal)
+
+mu.ML <- fit.logNormal$coefficients
+sigma.ML <- fit.logNormal$scale
+```
+
+Next, get the upper and lower one sided 95% plug in prediction bounds.
+
+```{r}
+(T.tilda.lower <- exp(mu.ML + (qnorm(0.05)*sigma.ML)))
+(T.tilda.upper <- exp(mu.ML + (qnorm(0.95)*sigma.ML)))
+
+#The 2 sided 90% prediction interval is (T.tilda.lower, T.tilda.upper)
+```
+
+I am going to simulate using fractional random weight instead of parametric bootstrap and see what I get.
+
+```{r eval=FALSE, include=FALSE}
+start.time <- Sys.time()
+B <- 10000
+n <- nrow(ApplianceCord.current)
+r <- sum(ApplianceCord.current$delta)
+mu.B <- c()
+sigma.B <- c()
+
+alpha.c <- 1 - 0.975 #start with alpha.c as "1 - 0.95". Then, play around with it to find a value that gives CP.PI.PB.upper as 0.95. Then repeat process again to find a value that gives CP.PI.FRW.lower as 0.95. The formula for CP.PI.FRW.upper and CP.PI.PB.lower is given below.
+
+i <- 1
+
+while(i <= B){
+  
+  if(i%%1000 == 0){print(i)}
+  
+  #The next 3 lines of code are for generating the fractional random weights for simulation.
+  gamma_randomNumbers <- rgamma(n, shape = 1, rate = 1)
+dirichlet_randomNumbers <- gamma_randomNumbers/sum(gamma_randomNumbers)
+fractional_randomWeights <- n*dirichlet_randomNumbers
+
+fit_B <- survival::survreg(Surv(Hours, delta) ~ 1, data = ApplianceCord.current, weights = fractional_randomWeights,dist = "lognormal")
+
+  mu.B[i] <- fit_B$coefficients
+  sigma.B[i] <- fit_B$scale
+  
+  i <- i + 1
+}
+
+  T.tilda.lower.B <- exp(mu.B + (qnorm(alpha.c)*sigma.B))
+  T.tilda.upper.B <- exp(mu.B + (qnorm(1-alpha.c)*sigma.B))
+
+#The next 2 lines of code gives the coverage probability for the upper and lower bounds. See section 3.3 in the paper linked here: https://drive.google.com/open?id=1yqxRGOqa1-FVEou9B8jw89xQSjmYPiij&usp=drive_fs   
+  
+(CP.PI.FRW.upper <- ((1/B)*sum(pnorm((log(T.tilda.upper.B)-mu.ML)/sigma.ML))))
+
+(CP.PI.FRW.lower <- ((1/B)*sum(1-pnorm((log(T.tilda.lower.B)-mu.ML)/sigma.ML))))
+
+  #The calibrated values of the prediction bounds/interval shown below. This depends on the value of alpha.c that gives approx 95% coverage probability. This will be different for the upper and lower bounds. You will have to play around with it. See page 2 in the link here: https://drive.google.com/open?id=1Lf45d_og0teSJCYXarHQp5rxaCOofnSc&usp=drive_fs
+
+T.tilda.lower.calib.FRW <- exp(mu.ML + (qnorm(1-0.97)*sigma.ML))
+T.tilda.upper.calib.FRW <- exp(mu.ML + (qnorm(0.975)*sigma.ML))
+
+
+end.time <- Sys.time()
+
+end.time - start.time
+
+
+```
+
+Appliance cord is also a good option for the prediction blog. Both B6 and B7 types are good options.
+
+Fit the regression model for the Appliance cord dataset and plot log-normal and weibull plots.
+
+```{r}
+##I need the Kaplan Meir estimates of the CDF for each type. Instead of coding 2 separate times for 2 types, I am going to loop it.
+
+uniqueType <- sort(unique(ApplianceCord$Type))
+nonPar_CDF <- list()
+MLest_lognormal <- list()
+MLest_Weibull <- list()
+
+i <- 1
+while(i <= length(uniqueType)){
+  
+  df <- ApplianceCord %>%
+    dplyr::filter(Type == uniqueType[i])
+  
+  fit_df <- survival::survfit(Surv(Hours, delta) ~ 1, data = df)
+  
+  temp_df <- data.frame(Hours = fit_df$time,
+                        p = 1-fit_df$surv)
+  
+  nonPar_CDF[[i]] <- temp_df
+  
+  para_fit_logNormal <- survival::survreg(Surv(Hours, delta) ~ 1, data = df, dist = "lognormal")
+  
+  MLest_lognormal[[i]] <- c(para_fit_logNormal[["coefficients"]], para_fit_logNormal[["scale"]],para_fit_logNormal[["loglik"]][2]) 
+  
+  para_fit_weibull <- survival::survreg(Surv(Hours, delta) ~ 1, data = df, dist = "weibull")
+  
+  MLest_Weibull[[i]] <- c(para_fit_weibull[["coefficients"]], para_fit_weibull[["scale"]],para_fit_weibull[["loglik"]][2])
+  
+  i = i + 1
+  
+}
+
+names(nonPar_CDF) <- uniqueType
+names(MLest_lognormal) <- uniqueType
+names(MLest_Weibull) <- uniqueType
+
+#Transformers
+
+xTransformer.logNormal <- scales::trans_new(
+  name = "logNormal.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.logNormal <- scales::trans_new(
+  name = "logNormal.y.transform",
+  transform = function(p){
+    y = qnorm(p)
+    return(y)
+  },
+  inverse = function(y) {
+    p = pnorm(y)
+    return(p)
+  }
+)
+
+xTransformer.weibull <- scales::trans_new(
+  name = "weibull.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.weibull <- scales::trans_new(
+  name = "weibull.y.transform",
+  transform = function(p){
+    y = log(-log(1-p))
+    return(y)
+  },
+  inverse = function(y) {
+    p = 1 - exp(-exp(y))
+    return(p)
+  }
+)
+
+#Log normal
+
+ggplot() +
+  geom_point(
+  data = nonPar_CDF[["B6"]],
+  aes(x = Hours, y = p),
+  color = "red",
+) +
+  geom_point(
+  data = nonPar_CDF[["B7"]],
+  aes(x = Hours, y = p),
+  color = "blue",
+) + scale_x_continuous(
+  transform = xTransformer.logNormal,
+  name = "Hours",
+  breaks = seq(10,200, by=10)
+) + scale_y_continuous(
+  transform = yTransfomer.logNormal,
+  name = "Fraction Failing",
+  breaks = seq(0.01,0.99,0.05)
+) +
+  geom_abline(
+  aes(intercept = (-MLest_lognormal[["B6"]][1]/MLest_lognormal[["B6"]][2]), #y-axis intercept
+      slope = 1/MLest_lognormal[["B6"]][2]),
+  color = "red"
+) +
+  geom_abline(
+  aes(intercept = (-MLest_lognormal[["B7"]][1]/MLest_lognormal[["B7"]][2]), #y-axis intercept
+      slope = 1/MLest_lognormal[["B7"]][2]),
+  color = "blue"
+) + ggtitle(label = "Log-Normal")
+
+#Weibull
+
+ggplot() + 
+  geom_point(
+  data = nonPar_CDF[["B6"]],
+  aes(x = Hours, y = p),
+  color = "red",
+) +
+  geom_point(
+  data = nonPar_CDF[["B7"]],
+  aes(x = Hours, y = p),
+  color = "blue",
+) + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Hours",
+  breaks = seq(10,200, by=10)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = seq(0.01,0.99,0.05)
+) + 
+  geom_abline(
+  aes(intercept = (-MLest_Weibull[["B6"]][1]/MLest_Weibull[["B6"]][2]), #y-axis intercept
+      slope = 1/MLest_Weibull[["B6"]][2]),
+  color = "red"
+) +
+  geom_abline(
+  aes(intercept = (-MLest_Weibull[["B7"]][1]/MLest_Weibull[["B7"]][2]), #y-axis intercept
+      slope = 1/MLest_Weibull[["B7"]][2]),
+  color = "blue"
+) + ggtitle(label = "Weibull")
+
+```
+
+Fit the EqualSig model and plot it
+
+```{r}
+para_fit_logNormal.Factor <- survival::survreg(Surv(Hours, delta) ~ factor(Type, levels = uniqueType), data = ApplianceCord, dist = "lognormal")
+
+summary(para_fit_logNormal.Factor)
+
+mu.B6.equalSig <- para_fit_logNormal.Factor[["coefficients"]][1] #baseline/intercept
+
+mu.B7.equalSig <- mu.B6.equalSig + para_fit_logNormal.Factor[["coefficients"]][2] #Because mu.B6.equalSig is the intercept i.e baseline
+
+sigma.equalSig <- para_fit_logNormal.Factor[["scale"]]
+
+#Log normal plot equalSig
+
+ggplot() +
+  geom_point(
+  data = nonPar_CDF[["B6"]],
+  aes(x = Hours, y = p),
+  color = "red",
+) +
+  geom_point(
+  data = nonPar_CDF[["B7"]],
+  aes(x = Hours, y = p),
+  color = "blue",
+) + scale_x_continuous(
+  transform = xTransformer.logNormal,
+  name = "Hours",
+  breaks = seq(10,200, by=10)
+) + scale_y_continuous(
+  transform = yTransfomer.logNormal,
+  name = "Fraction Failing",
+  breaks = seq(0.01,0.99,0.05)
+) + geom_abline(
+  aes(intercept = (-mu.B6.equalSig/sigma.equalSig), #y-axis intercept
+      slope = 1/sigma.equalSig),
+  color = "red"
+) + geom_abline(
+  aes(intercept = (-mu.B7.equalSig/sigma.equalSig), #y-axis intercept
+      slope = 1/sigma.equalSig),
+  color = "blue"
+) + ggtitle(label = "Log-Normal EqualSig")
+```
+
+Let me try Appliance B field failures 
+
+```{r}
+ApplianceB <- readr::read_csv("G:\\My Drive\\rao@ualberta.ca 2022-12-08 10 58\\shishir@tamu.edu\\My Drive\\Interesting papers\\Survival Models\\GitHub\\Survival\\Survival-Analysis\\Blog 9\\Data\\ApplianceB.csv")
+
+ApplianceB <- ApplianceB %>%
+  dplyr::mutate(delta = ifelse(ApplianceB$`Censoring Indicator` == "Failed",1,0)) %>%
+  dplyr::rename(Censor = `Censoring Indicator`) %>%
+  tidyr::uncount(Count) %>%
+  dplyr::filter(`Data Source` == "Field")
+```
+
+Fit a log-normal distribution
+
+```{r}
+fit.logNormal <- survival::survreg(Surv(Days, delta) ~ 1, data = ApplianceB, dist = "lognormal")
+
+summary(fit.logNormal)
+
+mu.ML <- fit.logNormal$coefficients
+sigma.ML <- fit.logNormal$scale
+```
+
+Next, get the upper and lower one sided 95% plug in prediction bounds.
+
+```{r}
+(T.tilda.lower <- exp(mu.ML + (qnorm(0.05)*sigma.ML)))
+(T.tilda.upper <- exp(mu.ML + (qnorm(0.95)*sigma.ML)))
+
+#The 2 sided 90% prediction interval is (T.tilda.lower, T.tilda.upper)
+```
+
+The prediction interval is just too wide since we have a lot of censoring.
+
+Try Mechanical Switch.
+
+```{r}
+MechanicalSwitch <- readr::read_csv("G:\\My Drive\\rao@ualberta.ca 2022-12-08 10 58\\shishir@tamu.edu\\My Drive\\Interesting papers\\Survival Models\\GitHub\\Survival\\Survival-Analysis\\Blog 9\\Data\\MechanicalSwitch.csv")
+
+MechanicalSwitch <- MechanicalSwitch %>%
+  dplyr::mutate(delta = ifelse(MechanicalSwitch$`Failure Mode` == "Censored",0,1)) %>%
+  dplyr::rename(Operations = `Millions of Operations`)
+```
+
+Fit a log-normal distribution
+
+```{r}
+fit.logNormal <- survival::survreg(Surv(Operations, delta) ~ 1, data = MechanicalSwitch, dist = "lognormal")
+
+summary(fit.logNormal)
+
+mu.ML <- fit.logNormal$coefficients
+sigma.ML <- fit.logNormal$scale
+```
+
+Next, get the upper and lower one sided 95% plug in prediction bounds.
+
+```{r}
+(T.tilda.lower <- exp(mu.ML + (qnorm(0.05)*sigma.ML)))
+(T.tilda.upper <- exp(mu.ML + (qnorm(0.95)*sigma.ML)))
+
+#The 2 sided 90% prediction interval is (T.tilda.lower, T.tilda.upper)
+```
+
+The naive plug in prediction interval is (1.25,3.37).
+
+I am going to simulate using fractional random weight instead of parametric bootstrap and see what I get.
+
+```{r eval=FALSE, include=FALSE}
+start.time <- Sys.time()
+B <- 10000
+n <- nrow(MechanicalSwitch)
+r <- sum(MechanicalSwitch$delta)
+mu.B <- c()
+sigma.B <- c()
+
+alpha.c <- 1 - 0.96 #start with alpha.c as "1 - 0.95". Then, play around with it to find a value that gives CP.PI.PB.upper as 0.95. Then repeat process again to find a value that gives CP.PI.FRW.lower as 0.95. The formula for CP.PI.FRW.upper and CP.PI.PB.lower is given below.
+
+i <- 1
+
+while(i <= B){
+  
+  if(i%%1000 == 0){print(i)}
+  
+  #The next 3 lines of code are for generating the fractional random weights for simulation.
+  gamma_randomNumbers <- rgamma(n, shape = 1, rate = 1)
+dirichlet_randomNumbers <- gamma_randomNumbers/sum(gamma_randomNumbers)
+fractional_randomWeights <- n*dirichlet_randomNumbers
+
+fit_B <- survival::survreg(Surv(Operations, delta) ~ 1, data = MechanicalSwitch, weights = fractional_randomWeights,dist = "lognormal")
+
+  mu.B[i] <- fit_B$coefficients
+  sigma.B[i] <- fit_B$scale
+  
+  i <- i + 1
+}
+
+  T.tilda.lower.B <- exp(mu.B + (qnorm(alpha.c)*sigma.B))
+  T.tilda.upper.B <- exp(mu.B + (qnorm(1-alpha.c)*sigma.B))
+
+#The next 2 lines of code gives the coverage probability for the upper and lower bounds. See section 3.3 in the paper linked here: https://drive.google.com/open?id=1yqxRGOqa1-FVEou9B8jw89xQSjmYPiij&usp=drive_fs   
+  
+(CP.PI.FRW.upper <- ((1/B)*sum(pnorm((log(T.tilda.upper.B)-mu.ML)/sigma.ML))))
+
+(CP.PI.FRW.lower <- ((1/B)*sum(1-pnorm((log(T.tilda.lower.B)-mu.ML)/sigma.ML))))
+
+  #The calibrated values of the prediction bounds/interval shown below. This depends on the value of alpha.c that gives approx 95% coverage probability. This will be different for the upper and lower bounds. You will have to play around with it. See page 2 in the link here: https://drive.google.com/open?id=1Lf45d_og0teSJCYXarHQp5rxaCOofnSc&usp=drive_fs
+
+(T.tilda.lower.calib.FRW <- exp(mu.ML + (qnorm(1-0.96)*sigma.ML)))
+(T.tilda.upper.calib.FRW <- exp(mu.ML + (qnorm(0.96)*sigma.ML)))
+
+
+end.time <- Sys.time()
+
+end.time - start.time
+
+
+```
+
+Mechanical Switch is also a good option for the prediction blog. How do their probability plots look like?
+
+Weibull plot first
+
+```{r}
+#Points
+
+fit_3 <- survival::survfit(Surv(Operations, delta) ~ 1, data = MechanicalSwitch)
+
+summary(fit_3)
+
+CDF_df <- data.frame(Operations = fit_3$time,
+                     p = 1 - fit_3$surv) %>%
+  dplyr::distinct(p, .keep_all = TRUE) #This line is required. Otherwise, the time column includes all observations. I just need the observations where there is a jump in the CDF.
+
+CDF_df <- CDF_df %>%
+      dplyr::mutate(bottomOfStairs = c(0,head(p,-1))) %>%
+      dplyr::mutate(middleOfStairs = (p + bottomOfStairs)/2) %>% #Note: p is top of stairs.
+      dplyr::select(!p) %>%
+      dplyr::rename(p = middleOfStairs) #This piece of code is for plotting the CDF at the mid point of the jumps instead of plotting at the top of the jumps. See Section 6.4.2 of Chapter 6 in SMRD2.
+     
+#Line. 
+
+fit.weibull <- survival::survreg(Surv(Operations, delta) ~ 1, data = MechanicalSwitch, dist = "weibull")
+
+summary(fit.weibull)
+
+mu.ML_Weibull <- fit.weibull$coefficients
+se_mu.ML_Weibull <- sqrt(fit.weibull[["var"]][1,1])
+sigma.ML_Weibull <- fit.weibull$scale
+se_sigma.ML_Weibull <- sqrt((sigma.ML_Weibull**2)*fit.weibull[["var"]][2,2])
+
+
+#Dashed lines. Prepare a dataframe to hold values of the CI for F(t). We will use the CI based on "e", as done in chunk 4
+
+t <-seq(1.1,3.8,length = 10000) #Range of data used
+e <- (log(t) - mu.ML_Weibull)/sigma.ML_Weibull
+
+dgdMu <- (-1/sigma.ML_Weibull)*(exp(-exp(e)))*(exp(e))
+dgdSigma <- (-e/sigma.ML_Weibull)*(exp(-exp(e)))*(exp(e))
+
+se_Ft.ML_Weibull <- sqrt(((dgdMu**2)*(se_mu.ML_Weibull**2)) + (2*(dgdMu)*(dgdSigma)*(sigma.ML_Weibull*fit.weibull[["var"]][1,2])) + ((dgdSigma**2)*(se_sigma.ML_Weibull**2)))
+
+#Confidence interval based on "e".
+
+se_e_Weibull <- (1/sigma.ML_Weibull)*sqrt((se_mu.ML_Weibull**2) + (2*e*(sigma.ML_Weibull*fit.weibull[["var"]][1,2])) + ((e**2)*(se_sigma.ML_Weibull**2)))
+
+CI_lower_e_Weibull <- e - (qnorm(0.975)*se_e_Weibull)
+CI_upper_e_Weibull <- e + (qnorm(0.975)*se_e_Weibull)
+
+CI_lower_eFt_Weibull <- 1 - exp(-exp(CI_lower_e_Weibull))
+CI_upper_eFt_Weibull <- 1 - exp(-exp(CI_upper_e_Weibull))
+
+CDF_CI_Weibull_df <- data.frame(Operations = t,
+                                CI_Lower = CI_lower_eFt_Weibull,
+                                CI_Upper = CI_upper_eFt_Weibull)
+
+#Transformers
+
+xTransformer.weibull <- scales::trans_new(
+  name = "weibull.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.weibull <- scales::trans_new(
+  name = "weibull.y.transform",
+  transform = function(p){
+    y = log(-log(1-p))
+    return(y)
+  },
+  inverse = function(y) {
+    p = 1 - exp(-exp(y))
+    return(p)
+  }
+)
+
+ggplot() + geom_point(data = CDF_df, aes(x = Operations, y = p)) + geom_line(data = CDF_CI_Weibull_df,
+              aes(x = Operations, y = CI_Lower),
+              linetype = "dashed") + geom_line(data= CDF_CI_Weibull_df, aes(x = Operations, y = CI_Upper), linetype = "dashed") + geom_abline(
+  aes(intercept = (-fit.weibull$coefficients/fit.weibull$scale), #y-axis intercept
+      slope = 1/fit.weibull$scale)
+)  + scale_x_continuous(
+  transform = xTransformer.weibull,
+  name = "Millions of Operations",
+  breaks = seq(1,4, by = 0.2)
+) + scale_y_continuous(
+  transform = yTransfomer.weibull,
+  name = "Fraction Failing",
+  breaks = seq(0.01,0.99,0.05)
+) + ggtitle(label = "Weibull Probability Plot")
+```
+
+Lognormal plot next
+
+```{r}
+#Points (We already have this from the Weibull plot)
+
+#Line. Note that lognormal ML fit already available from fit.logNormal
+
+mu.ML_logNormal <- fit.logNormal$coefficients
+se_mu.ML_logNormal <- sqrt(fit.logNormal[["var"]][1,1])
+sigma.ML_logNormal <- fit.logNormal$scale
+se_sigma.ML_logNormal <- sqrt((sigma.ML_logNormal**2)*fit.logNormal[["var"]][2,2])
+
+#Dashed lines. Prepare a dataframe to hold values of the CI for F(t). We will use the CI based on "e", as done in chunk 5
+
+t <-seq(1.1,3.8,length = 10000) #Range of data used
+e <- (log(t) - mu.ML_logNormal)/sigma.ML_logNormal
+
+Ft.ML_Lognormal <- pnorm(e)
+
+#To get standard error of the above CDF, use equation 8.8 from SMRD2. My proof for 8.8 is here: https://drive.google.com/open?id=12D9tcASJAgxY2kecw2tbCGUK9a8RfrQK&usp=drive_fs
+
+dgdMu <- (-1/sigma.ML_logNormal)*dnorm(e)
+dgdSigma <- (-e/sigma.ML_logNormal)*dnorm(e)
+
+se_Ft.ML_logNormal <- sqrt(((dgdMu**2)*(se_mu.ML_logNormal**2)) + (2*(dgdMu)*(dgdSigma)*(sigma.ML_logNormal*fit.logNormal[["var"]][1,2])) + ((dgdSigma**2)*(se_sigma.ML_logNormal**2)))
+
+#Confidence interval based on "e".
+
+se_e_logNormal <- (1/sigma.ML_logNormal)*sqrt((se_mu.ML_logNormal**2) + (2*e*(sigma.ML_logNormal*fit.logNormal[["var"]][1,2])) + ((e**2)*(se_sigma.ML_logNormal**2)))
+
+CI_lower_e_logNormal <- e - (qnorm(0.975)*se_e_logNormal)
+CI_upper_e_logNormal <- e + (qnorm(0.975)*se_e_logNormal)
+
+CI_lower_eFt_logNormal <- pnorm(CI_lower_e_logNormal)
+CI_upper_eFt_logNormal <- pnorm(CI_upper_e_logNormal)
+
+CDF_CI_logNormal_df <- data.frame(Operations = t,
+                                CI_Lower = CI_lower_eFt_logNormal,
+                                CI_Upper = CI_upper_eFt_logNormal)
+
+#Transformers
+
+xTransformer.logNormal <- scales::trans_new(
+  name = "logNormal.x.transform",
+  transform = function(t.p){
+    x = log(t.p)
+    return(x)
+  },
+  inverse = function(x) {
+    t.p = exp(x)
+    return(t.p)
+  }
+)
+
+
+yTransfomer.logNormal <- scales::trans_new(
+  name = "logNormal.y.transform",
+  transform = function(p){
+    y = qnorm(p)
+    return(y)
+  },
+  inverse = function(y) {
+    p = pnorm(y)
+    return(p)
+  }
+)
+
+ggplot() + geom_point(data = CDF_df, aes(x = Operations, y = p)) + geom_line(data = CDF_CI_logNormal_df,
+              aes(x = Operations, y = CI_Lower),
+              linetype = "dashed") + geom_line(data= CDF_CI_logNormal_df, aes(x = Operations, y = CI_Upper), linetype = "dashed") + geom_abline(
+  aes(intercept = (-fit.logNormal$coefficients/fit.logNormal$scale), #y-axis intercept
+      slope = 1/fit.logNormal$scale)
+)  + scale_x_continuous(
+  transform = xTransformer.logNormal,
+  name = "Millions of Operations",
+  breaks = seq(1,4, by = 0.2)
+) + scale_y_continuous(
+  transform = yTransfomer.logNormal,
+  name = "Fraction Failing",
+  breaks = seq(0.01,0.99,0.05)
+) + ggtitle(label = "logNormal Probability Plot")
+```
+
+AIC
+
+```{r}
+AIC(fit.logNormal)
+AIC(fit.weibull)
+```
+
+Log Normal is preferred.

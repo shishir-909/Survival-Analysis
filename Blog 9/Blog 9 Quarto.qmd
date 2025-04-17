@@ -1,0 +1,111 @@
+---
+title: "Prediction Interval and its Callibration"
+author: "Shishir Rao"
+format:
+  html:
+    grid:
+      margin-width: 350px
+  pdf: default
+reference-location: margin
+citation-location: margin
+---
+
+```{r}
+#| include: false
+library(tufte)
+library(knitr)
+library(kableExtra)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(cache.extra = packageVersion("tufte"), echo = FALSE)
+options(htmltools.dir.version = FALSE)
+library(survival)
+library(tidyverse)
+library(readr)
+
+setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 9")
+```
+
+# Introduction
+
+A potential customer would like to know how long will an expensive piece of industrial equipment they intend to purchase operate before failing. A maintenance manager needs to make a decision on whether an operating unit should be shut down and brought in for maintenance or let it run for some more time. A manufacturing company would like to allocate budget for potential warranty claim returns and would like to know the number of product failures in the next 6 months.
+
+Questions of the above nature can be addressed by analyzing data from past failures and constructing prediction intervals. In this blog article, we will discuss prediction intervals, how are they different from confidence intervals and why is it necessary to calibrate prediction intervals. The methods discussed in this blog post are from the chapter on prediction intervals in a textbook[^1] that I have been reading. I highly recommend this book to anyone interested in applying statistical methods in the field of reliability engineering.
+
+[^1]: Statistical Methods for Reliability Data, Second Edition (William Q. Meeker, Luis A. Escobar, Francis G. Pascual)
+
+# Prediction Intervals vs Confidence Intervals
+
+A prediction interval is an interval within which a future observation is likely to fall, whereas a confidence interval is an interval within which a population parameter is likely to fall. Lets look at this difference with the help of an example.
+
+Suppose there are 1000 houses that are on sale in a particular neighborhood. We are interested in finding out the average sale price of a house in this neighborhood. If we had access to the 1000 sale prices, finding the average is a straightforward exercise. Now suppose that only 50 have been sold so far and we want to use this data to estimate the average sale price of the 1000 houses in the neighborhood.
+
+In the above example, our sample size is 50 and the population size is 1000. The population parameter that we want to estimate is the mean (or average) of 1000 homes [^2]. This population parameter is an unknown quantity, but it is fixed![^3] We can use the 50 sale prices to construct a confidence interval for the mean of 1000 sale prices.
+
+[^2]: Other quantities like the median or any other quantile are also population parameters
+
+[^3]: We are talking about the frequentist approach. In the Bayesian approach, parameters are also treated as random quantities.
+
+On the other hand, suppose we want to know the price range within which the next house that sells is going to fall in. This range would be the prediction interval. Note that the sale price of the next house that is sold is a random quantity, unlike the unknown population parameter which is fixed. The prediction that we are interested in is an "unknown and random" quantity whereas the average sale price of a house in the neighborhood is an "unknown but fixed" quantity. Confidence intervals are constructed for "unknown but fixed" population parameters[^4] and prediction intervals are constructed for the "unknown and random" quantity[^5]
+
+[^4]: Like the mean in this case
+
+[^5]: Sale price of the next house sold in this case.
+
+# Reliability Applications
+
+Similar to the example of house sale prices, consider a scenario where a customer wants to purchase an expensive piece of industrial equipment and is interested in the prediction interval for that particular equipment. The confidence interval would give the customer an idea of the mean time to failure of all identical equipment manufactured in the past, present and future by the manufacturer. Although this is good information to have, the customer wants an interval for one equipment. This interval, which is the prediction interval, accounts for individual variability in the time-to-failure.
+
+We can still use data from historical failures to get a prediction interval for an equipment. The difference between this case and the previous example of house prices is that historical data from equipment failures may be incomplete. This means that in addition to failures, the data might consist of censored observations, where the equipment hasn't failed by the end of the observation period[^6].
+
+[^6]: This is for right censored observations. We can also have left or interval censored observation and even truncated observations in reliability data.
+
+In the following article, a dataset consisting of past failures (and censored) observations will be used to construct a prediction interval. It will then be calibrated to ensure adequate coverage probability[^7]. All computations are performed using R.
+
+[^7]: Will be discussed later in the article
+
+# Case Study: Mechanical Switches
+
+## Data
+
+Table 1 shows failure times of 40 randomly selected mechanical switches tested in a facility. 3 switches had not failed by the end of the test, leading to right censored data.
+
+```{r Load Table, tab.cap="Table 1. Mechanical Switch Life Test Data"}
+#| echo: false
+
+MechanicalSwitch <- readr::read_csv("Data\\MechanicalSwitch.csv", show_col_types = FALSE)
+
+knitr::kable(MechanicalSwitch,
+             align = rep('c', 2),
+             table.envir = 'table*',
+             caption = 'Table 1') %>%
+  kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+  kableExtra::scroll_box(height = "200px")
+
+```
+
+There are 2 modes of failure - Spring A and Spring B. We are interested in constructing a prediction interval for a mechanical switch irrespective of mode of failure[^8].
+
+[^8]: The 2 modes of failure are competing risks, but this information is not considered in this analysis.
+
+The structure of the rest of the articles is as follows
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
