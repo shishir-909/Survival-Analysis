@@ -52,7 +52,7 @@ Similar to the example of house sale prices, consider a scenario where a custome
 
 We can use data from historical failures to get a prediction interval for an equipment. The difference between this case and the previous example of house prices is that historical data from equipment failures may be incomplete. This means that in addition to failures, the data might consist of censored observations, where the equipment hasn't failed by the end of the observation period^[This is for right censored observations. We can also have left or interval censored observation and even truncated observations in reliability data.].
 
-In the following article, a dataset consisting of past failures (and censored) observations will be analyzed to construct a prediction interval. It will then be calibrated to ensure adequate coverage probability^[Will be discussed later in the article]. All computations are performed using R and the code is available [**here**](https://github.com/shishir-909/Survival-Analysis/blob/110b5a7735fb2f6e82aac9102ccfda336d3ca350/Blog%209/Blog%209.Rmd).
+In the following article, a dataset consisting of past failures (and censored) observations will be analyzed to construct a prediction interval. It will then be calibrated to ensure adequate coverage probability^[Will be discussed later in the article]. All computations are performed using R and the code is available [**here**](https://github.com/shishir-909/Survival-Analysis/blob/07067df0e06b96ffc333d3f3cf16ad6dd63d1ce6/Blog%209/Blog%209.Rmd).
 
 # Case Study: Mechanical Switches
 
