@@ -12,3 +12,4 @@ As I finish reading a specific chapter from the Survival Analysis book, I will p
 ## Article 6: Parametric Modeling of Failure Time data: Part II (https://rpubs.com/shishir909/1252730)
 ## Article 7: Comparison of Failure Time Distributions (https://rpubs.com/shishir909/1259720)
 ## Article 8: Planning Life Tests (https://rpubs.com/shishir909/1269667)
+## Article 9: Prediction Interval and Calibration (https://rpubs.com/shishir909/1298996)
