@@ -31,8 +31,10 @@ library(readr)
 library(survminer)
 library(kableExtra)
 
-setwd("I:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 3")
+setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 3")
 ```
+
+*This article originally appeared on biostatistics.ca and can be found* [*here.*](https://www.biostatistics.ca/statistical-hypothesis-testing-of-failure-time-data-in-time-to-event-or-survival-analysis/)
 
 # Introduction
 
