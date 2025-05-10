@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/1226309/8e36e7439c654ed2af2f32924af73e7e
+bundleId: https://api.rpubs.com/api/v1/document/1226309/8e36e7439c654ed2af2f32924af73e7e
+url: http://rpubs.com/shishir909/1226309
+version: 1

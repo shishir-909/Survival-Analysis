@@ -30,6 +30,8 @@ library(kableExtra)
 setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 4")
 ```
 
+*This article originally appeared on biostatistics.ca and can be found* [*here.*](https://www.biostatistics.ca/statistical-hypothesis-testing-of-failure-time-data-in-time-to-event-or-survival-analysis-part-ii/)
+
 # Introduction
 
 This article is a continuation of the series of articles where I apply the concepts learnt from the book Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger) to datasets from reliability. The book focuses on applications in biology and medicine, but the methods described are equally applicable to other fields like reliability and quality assurance.
