@@ -34,6 +34,8 @@ library(km.ci)
 setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 5")
 ```
 
+*This article originally appeared on biostatistics.ca and can be found* [*here.*](https://www.biostatistics.ca/parametric-modeling-of-failure-time-data-in-time-to-event-or-survival-analysis/)
+
 # Introduction
 
 The four previous articles that I wrote were based on non-parametric methods in survival analysis. This is mainly because the book^[Survival Analysis: Techniques for Censored and Truncated Data, Second Edition (John P. Klein and Melvin L. Moescheberger)] I referred to was based on applications in medicine, where the aim of the analysis is mostly (although not exclusively) inference rather than prediction, and non-parametric and semi-parametric methods lend themselves well to such applications. Since my main interest lies in applications in reliability, the ability to make predictions is important and parametric methods are useful in such cases. 
