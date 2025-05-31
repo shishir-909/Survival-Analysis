@@ -33,6 +33,8 @@ library(km.ci)
 setwd("G:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 7")
 ```
 
+*This article originally appeared on biostatistics.ca and can be found* [*here.*](https://www.biostatistics.ca/comparison-of-failure-time-distributions-for-time-to-event-or-survival-analysis-a-tutorial-with-code/)
+
 # Introduction
 
 Applications involving comparison of time-to-failure data from different groups are common in the fields of reliability and manufacturing. For example, a designer might want to implement a new design to reduce costs, but wants to make sure that this change does not adversely affect the reliability of the product. Or, a manufacturer might want to find out if there is any difference in the time-to-failure of products manufactured from different batches or different assembly lines. Parametric and non-parametric methods to compare failure time distributions can be used for such purposes. Two of my previous blog articles([**here**](https://rpubs.com/shishir909/1199328) and [**here**](https://rpubs.com/shishir909/1226309)) dealt with non-parametric methods for comparing failure data. In this article, I demonstrate the use of a parametric method for the same purpose.
