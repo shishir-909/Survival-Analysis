@@ -24,6 +24,8 @@ options(htmltools.dir.version = FALSE)
 library(RSplida)
 ```
 
+*This article originally appeared on biostatistics.ca and can be found* [*here.*](https://www.biostatistics.ca/how-to-calculate-sample-size-for-reliability-life-testing-a-step-by-step-guide/)
+
 # Introduction
 
 Manufacturing companies conduct life tests on newly designed products before releasing it to the market. The test can help in identifying any potential weaknesses and failure modes, estimate the product lifespan, ensure the product is safe and meets any regulatory standards. Estimating the lifespan is particularly important since it allows manufacturers to set appropriate warranty periods.
