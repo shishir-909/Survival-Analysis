@@ -1,0 +1,2068 @@
+---
+title: "Untitled"
+format: html
+---
+
+
+```{r}
+# install.packages("R.matlab")
+# install.packages("ggrastr") # For rasterizing ggplot objects
+# install.packages("signal") # For signal processing functions
+# install.packages("moments") # For calculating kurtosis
+# install.packages("plotly") # For plotting
+library(plotly) # For interactive plotting
+library(moments) # For calculating kurtosis
+library(purrr)
+library(signal) # For signal processing functions
+library(ggrastr)
+library(R.matlab)
+library(KMsurv)
+library(survival)
+library(survMisc) ##Confidence bands not in survival package. survMisc is an extension of the survival package and contains confidence bands
+library(tidyverse)
+library(readxl)
+library(readr)
+library(flexsurv)
+library(km.ci)
+library(metR)
+library(WeibullR)
+library(RSplida)
+library(mvtnorm)
+library(cubature)
+library(nlme)
+library(rstan)
+library(janitor)
+library(bayesplot)
+
+getwd()
+setwd(
+  "g:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/Reliability/Matlab Bearings Tutorial/WindTurbineHighSpeedBearingPrognosis-Data"
+)
+```
+
+Load the .mat files and convert to data frames
+
+```{r}
+fname = c(
+  'data-20130307T015746Z.mat',
+  'data-20130308T023421Z.mat',
+  'data-20130309T023343Z.mat',
+  'data-20130310T030102Z.mat',
+  'data-20130311T030024Z.mat',
+  'data-20130312T061710Z.mat',
+  'data-20130313T063404Z.mat',
+  'data-20130314T065041Z.mat',
+  'data-20130315T065003Z.mat',
+  'data-20130316T065643Z.mat',
+  'data-20130317T065604Z.mat',
+  'data-20130317T184756Z.mat',
+  'data-20130318T184715Z.mat',
+  'data-20130320T003354Z.mat',
+  'data-20130321T003314Z.mat',
+  'data-20130322T003950Z.mat',
+  'data-20130323T003911Z.mat',
+  'data-20130324T004549Z.mat',
+  'data-20130325T004512Z.mat',
+  'data-20130326T014150Z.mat',
+  'data-20130327T035827Z.mat',
+  'data-20130328T095531Z.mat',
+  'data-20130329T095505Z.mat',
+  'data-20130330T100142Z.mat',
+  'data-20130331T193818Z.mat',
+  'data-20130401T193739Z.mat',
+  'data-20130402T194415Z.mat',
+  'data-20130403T212942Z.mat',
+  'data-20130404T212901Z.mat',
+  'data-20130405T213537Z.mat',
+  'data-20130406T221209Z.mat',
+  'data-20130407T221131Z.mat',
+  'data-20130408T221809Z.mat',
+  'data-20130409T231445Z.mat',
+  'data-20130410T231407Z.mat',
+  'data-20130411T231358Z.mat',
+  'data-20130412T170231Z.mat',
+  'data-20130413T170210Z.mat',
+  'data-20130414T170847Z.mat',
+  'data-20130415T225524Z.mat',
+  'data-20130416T230159Z.mat',
+  'data-20130417T230120Z.mat',
+  'data-20130418T230803Z.mat',
+  'data-20130419T230747Z.mat',
+  'data-20130420T151307Z.mat',
+  'data-20130421T151231Z.mat',
+  'data-20130422T151908Z.mat',
+  'data-20130423T151830Z.mat',
+  'data-20130424T215514Z.mat',
+  'data-20130425T232202Z.mat'
+)
+
+# Create a tibble to hold the data
+df <- tibble(
+  fname = fname,
+  vibration = list(NULL),
+  tach = list(NULL),
+  .rows = length(fname)
+)
+
+# Loop through each file name and read the corresponding .mat file
+for (f in fname) {
+  # Read the .mat file
+  data <- readMat(f)
+  df$vibration[[which(df$fname == f)]] <- data$vibration
+  df$tach[[which(df$fname == f)]] <- data$tach
+}
+
+# Add a column for the day number
+
+df <- df %>%
+  mutate(day = row_number())
+
+```
+
+Each row of the tibble `df` now contains the vibration and tach data for each file. The vibration data has been collected over 6 seconds. I want to do 2 things:
+
+1. Find the frequency in Hertz. 1 Hz = 1 cycle per second.
+2. Create a time vector that corresponds to the vibration data.
+
+
+```{r}
+# Number of vibration data points in each file
+length(df$vibration[[1]]) # Length of vibration data in each file
+
+# Number of vibration readings per second
+fs <- length(df$vibration[[1]]) / 6 # 6 seconds of data
+
+cat("Fequency in Hertz:", fs, " Hz\n")
+
+# create a time vector
+t <- seq(0, 6, length.out = length(df$vibration[[1]])) # 6 seconds of data
+
+```
+
+Plot the vibration data for all files
+
+
+```{r}
+
+# --- Data Preparation for ggplot ---
+# We need to transform the data into a "long" or "tidy" format.
+plot_data <- df %>%
+  # Create a grouping variable for the colors that cycles every 7 days
+  mutate(color_group = as.factor((day - 1) %% 7)) %>%
+  # Add the time vector 't' to each row
+  mutate(time = list(t)) %>%
+  # Unnest the list-columns to create a long dataframe
+  unnest(cols = c(time, vibration)) %>%
+  # Create the staggered time axis for plotting
+  mutate(time_staggered = time + (day - 1) * 6.0)
+# %>%
+#   filter(day <= 2) # Keep only the first 2 days
+
+# Define the colors (same as your Python list)
+r_colors <- c(
+  'royalblue',
+  'darkorange',
+  'gold',
+  'purple',
+  'green',
+  'lightblue',
+  'firebrick'
+)
+
+# --- Create the Plot ---
+vibration_plot <- ggplot(
+  plot_data,
+  aes(x = time_staggered, y = vibration, group = day, color = color_group)
+) +
+  rasterise(geom_line(linewidth = 0.25), dpi = 150) +
+  # Use the custom colors and remove the legend
+  scale_color_manual(values = r_colors, guide = "none") +
+  # Add labels
+  labs(
+    x = "Time (in s): sample = 50 days in total, 6 seconds per day",
+    y = "Acceleration (in g)"
+  ) +
+  # Use a clean theme
+  theme_classic()
+
+# To set the output size (equivalent to figsize), you typically use ggsave. Takes a long time. DO it once and then comment it out.
+# ggsave(
+#   "vibration_plot.png",
+#   plot = vibration_plot,
+#   width = 12,
+#   height = 6,
+#   dpi = 150
+# )
+
+```
+
+
+The plot above looks like the plot in the MATLAB tutorial (apart from the fact that I am using all 50 days of data, while the MATLAB tutorial only uses the first 10 days).
+
+Now, do the short term Fourier transform (STFT) of the vibration data.
+
+Before doing the STFT, define the problem statement.
+
+Problem statement. I want to predict the remaining useful life of a wind turbine bearing using vibration data. The vibration data is collected over 6 seconds every day for 50 days. I will use the first 20 days of data to train the model, and will repeatedly calculate the remaining useful life of the bearing each day as I continue to collect more data. The bearing fails on day 50, so my assumption is that my threshold for failure in my degradation model is is the value on day 50. (Normally, the threshold is determined by subject matter experts, but in this case, I will use the value on day 50 as the threshold since I know that the bearing fails on day 50.) I will use the spectral kurtosis of the vibration data my degradation signal.
+
+First, filter only first 20 days of the data.
+
+```{r}
+complete_df <- df # Keep a copy of the complete data
+
+# df <- df %>%
+#   filter(day <= 20) # Keep only the first 20 days
+```
+
+Plot the vibration data for first 20 days only
+
+
+```{r}
+
+# --- Data Preparation for ggplot ---
+# We need to transform the data into a "long" or "tidy" format.
+plot_data <- df %>%
+  # Create a grouping variable for the colors that cycles every 7 days
+  mutate(color_group = as.factor((day - 1) %% 7)) %>%
+  # Add the time vector 't' to each row
+  mutate(time = list(t)) %>%
+  # Unnest the list-columns to create a long dataframe
+  unnest(cols = c(time, vibration)) %>%
+  # Create the staggered time axis for plotting
+  mutate(time_staggered = time + (day - 1) * 6.0)
+# %>%
+#   filter(day <= 2) # Keep only the first 2 days
+
+# Define the colors (same as your Python list)
+r_colors <- c(
+  'royalblue',
+  'darkorange',
+  'gold',
+  'purple',
+  'green',
+  'lightblue',
+  'firebrick'
+)
+
+# --- Create the Plot ---
+vibration_plot <- ggplot(
+  plot_data,
+  aes(x = time_staggered, y = vibration, group = day, color = color_group)
+) +
+  rasterise(geom_line(linewidth = 0.25), dpi = 150) +
+  # Use the custom colors and remove the legend
+  scale_color_manual(values = r_colors, guide = "none") +
+  # Add labels
+  labs(
+    x = "Time (in s): sample = 50 days in total, 6 seconds per day",
+    y = "Acceleration (in g)"
+  ) +
+  # Use a clean theme
+  theme_classic()
+
+# To set the output size (equivalent to figsize), you typically use ggsave. Takes a long time. DO it once and then comment it out.
+# ggsave(
+#   "vibration_plot_20Days.png",
+#   plot = vibration_plot,
+#   width = 12,
+#   height = 6,
+#   dpi = 150
+# )
+
+```
+
+
+Next, I want to calculate the spectral kurtosis of the vibration data. The spectral kurtosis is a measure of how "peaky" the frequency spectrum is. It is calculated by taking the kurtosis of the magnitude spectrum of the short-term Fourier transform (STFT) of the signal. But in order to do this, I need to define the parameters for the STFT. The parameters that I need to decide are:
+
+1. Window size (wc): The number of samples in each window. A larger window size will give better frequency resolution, but worse time resolution. A smaller window size will give better time resolution, but worse frequency resolution. The window size should be a power of 2 for efficient computation. MATLAB uses a window size of 128 samples.
+
+2. Overlap (n_overlap): The number of samples that overlap between consecutive windows. A larger overlap will give better time resolution, but will increase the computational cost. A smaller overlap will give worse time resolution, but will decrease the computational cost. The overlap should be less than the window size. MATLAB uses an overlap of 0.8 * window size.
+
+3. Number of FFT points (n_fft): The number of points in the FFT. A larger number of FFT points will give better frequency resolution, but will increase the computational cost. A smaller number of FFT points will give worse frequency resolution, but will decrease the computational cost. The number of FFT points should be a power of 2 for efficient computation. MATLAB uses a number of FFT points (=1024) that is larger than the window size for zero-padding.
+
+4. window type: The type of window to use. Common choices are Hanning, Hamming, and Kaiser. The window type will affect the spectral leakage and the main lobe width of the FFT. MATLAB uses a Kaiser window with beta=20.
+
+Of all the above parameters, the window size has the most effect on the spectral kurtosis. MATLAB uses the concept of a kurtogram to set the window size.  I will use the same parameters as MATLAB for now, and then I will experiment with different parameters later.
+
+
+kurtogram in R
+
+```{r}
+# --- Use the corrected Spectral Kurtosis (SK) function from our last conversation ---
+spectral_kurtosis_sk <- function(x, fs, window_length) {
+  x_vector <- as.vector(x)
+  n_fft <- 1024 # Number of FFT points, larger than window size for zero-padding
+  n_overlap <- round(0.80 * window_length) # Using 80% overlap as in MATLAB pkurtosis
+
+  spec <- signal::specgram(
+    x = x_vector,
+    n = n_fft,
+    Fs = fs,
+    window = hanning(window_length),
+    overlap = n_overlap
+  )
+
+  # Only keep values corresponding to frequencies between 5000 Hz and 45000 Hz. Note that I won't know these boundaries beforehand without some trial and error. After some trial and error, I noticed peaks at the boundaries of the frequency spectrum, which are likely mathematical artifacts. The increasing spectral kurtosis peak around the 10000 Hz frequency range seems to be the signal indicating a degrading bearing. Hence, I will keep only the frequencies between 5000 Hz and 45000 Hz. You will first have to plot the 3D plot of spectral kurtosis vs frequency vs time to see these artifacts and decide the boundaries. I have done this in a separate code cell below.
+
+  freq_filter <- spec$f >= 5000 & spec$f <= 45000
+  spec$f <- spec$f[freq_filter]
+  spec$S <- spec$S[freq_filter, ]
+
+  power_spec <- abs(spec$S)^2
+
+  sk <- apply(power_spec, 1, function(power_row) {
+    numerator <- mean(power_row^2)
+    denominator <- (mean(power_row))^2
+    if (denominator == 0) {
+      return(0)
+    }
+    return((numerator / denominator) - 2)
+  })
+
+  return(data.frame(frequency = spec$f, spectral_kurtosis = sk))
+}
+
+# --- Create a function to generate the kurtogram data ---
+calculate_kurtogram <- function(x, fs, window_sizes) {
+  # Use map() to apply the SK function over each window size
+  kurtogram_data <- map_dfr(window_sizes, function(w_len) {
+    # Calculate SK for the current window size
+    sk_results <- spectral_kurtosis_sk(x, fs, window_length = w_len)
+
+    # Find the frequency with the maximum SK for this window size
+    max_sk_for_window <- sk_results %>%
+      filter(spectral_kurtosis == max(spectral_kurtosis)) %>%
+      slice(1) # Take the first one if there are ties
+
+    # Return a single row with the window length and the max SK info
+    return(
+      data.frame(
+        window_size = w_len,
+        max_sk = max_sk_for_window$spectral_kurtosis,
+        optimal_freq = max_sk_for_window$frequency
+      )
+    )
+  })
+
+  return(kurtogram_data)
+}
+
+
+# Test the kurtogram calculation on the 20th day's vibration data
+
+v <- as.vector(df$vibration[[20]]) # 20th day's vibration data
+
+# Define the range of window sizes to test
+window_sizes_to_test <- c(32, 64, 128, 256, 512, 1024)
+
+# Generate the data for the plot
+kurtogram_plot_data <- calculate_kurtogram(v, fs, window_sizes_to_test)
+
+# Plot the kurtogram as a heatmap
+ggplot(
+  kurtogram_plot_data,
+  aes(x = optimal_freq, y = as.factor(window_size), fill = max_sk)
+) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Max SK") +
+  labs(
+    title = "Simple Kurtogram in R",
+    x = "Optimal Frequency (Hz)",
+    y = "Window Size"
+  ) +
+  theme_minimal()
+
+```
+
+For the vibration signal on the latest day, which is day 20, the highest spectral kurtosis value occurs at a window size of 256 samples and a frequency of around 11500 Hz. I will use a window size of 256 for the STFT parameters. I will have to stick with this window size for all future days as well. Why? Because, I am going to assume that the spectral kurtosis on day 50 is the threshold for failure, and I will have to use the same window size for all days in order to be able to compare the spectral kurtosis values across days. Typically, the threshold is determined by subject matter expertise or past data. Since we do not have that data, I am going to assume that the spectral kurtosis value on day 50 is the threshold.
+
+If I change the window size every day, then the spectral kurtosis values will not be comparable across days. So, 256 is the window size that we shall go with.
+
+Note that if I consider only data from day 50, then the optimal window size that gives me the maximum value of spectral kurtosis is 128 samples. But, I won't know the optimal window size for day 50 until I reach day 50. Hence, I will use the optimal window size for the latest day that I have data for, which is day 20.
+
+```{r}
+# Let's implement the spectral kurtosis formula from the paper
+# --- Define Parameters --- See this link for some intuitive understanding of the parameters: https://vru.vibrationresearch.com/lesson/calculating-psd-time-history/
+wc <- 256 # Window size
+n_overlap <- round(0.8 * wc) # Matches overlap in pkurtosis MATLAB function
+n_fft <- 1024 # Number of FFT points, larger than window size for zero-padding
+# n_fft <- wc # Trying to match MATLAB exactly
+
+beta_value <- 20 # Beta parameter for the Kaiser window. The relationship between beta and leakage is given on the pspectrum page of the MATLAB website. It says beta = 40(1-l), where l is the leakage. Since the default leakage in MATLAB is 0.5, beta = 20. Here is the link to the page: https://www.mathworks.com/help/signal/ref/pspectrum.html#buqf5y4-1-window
+kaiser_window <- kaiser(n = wc, beta = beta_value)
+
+results_df <- df %>%
+  # Create a new column that holds the results of the STFT and kurtosis calculation
+  mutate(
+    sk_results = map(vibration, function(v_signal) {
+      v_signal <- as.vector(v_signal) # Ensure the signal is a vector
+      # 1. Calculate the spectrogram (STFT) for one signal
+      spec <- signal::specgram(
+        x = v_signal,
+        n = n_fft,
+        Fs = fs,
+        overlap = n_overlap,
+        # window = hanning(wc) # Hanning window
+        window = kaiser_window # Kaiser window
+      )
+
+      # 2. Calculate kurtosis on the magnitude for each frequency bin
+      # The '1' in apply() means "calculate row-wise"
+      # Note: R's moments::kurtosis() is Pearson's kurtosis (not Fisher's), matching 'fisher = False'
+      sk <- apply(spec$S, 1, function(v) {
+        numerator <- mean((abs(v))^4)
+        mean_power <- mean((abs(v))^2)
+        denominator <- mean_power^2
+        spectral_kurtosis <- (numerator / denominator) - 2
+        return(spectral_kurtosis)
+      }) # MATLAB's pkurtosis calculates the kurtosis on the magnitude spectrum. Here is the link to the page that contains the formuala for spectral kurtosis on the MATLAB website. (Had it been on the power spectrum instead of magnitude spectrum, we would need to use abs(spec$S)^2.)
+
+      # Return a dataframe of frequencies and their kurtosis values
+      data.frame(frequency = spec$f, spectral_kurtosis = sk)
+    })
+  ) %>%
+  # Expand the dataframe so each frequency has its own row
+  unnest(sk_results)
+
+# --- Post-processing (Equivalent to your Python code) ---
+
+# The results_df is now a "tidy" dataframe with all frequencies and kurtosis values.
+
+# Filter in order to keep only those frequencies between 5000 Hz and 45000 Hz
+
+# results_df <- results_df %>%
+#   filter(frequency >= 5000 & frequency <= 45000)
+
+# To get the exact matrix equivalents of 'f' and 'fft':
+
+# 'f' matrix equivalent (each column is a frequency vector)
+unique_frequencies <- unique(results_df$frequency)
+num_signals <- nrow(df) # Number of signals (days)
+f_matrix <- replicate(num_signals, unique_frequencies)
+
+# # Remove data from the first 15 and the last 6 frequencies from the unique_frequencies vector.
+
+# unique_frequencies <- unique_frequencies[20:(length(unique_frequencies) - 15)]
+
+# # Only keep data from those frequencies in results_df
+
+# results_df <- results_df %>%
+#   filter(frequency %in% unique_frequencies)
+
+# Only keep frequencies from 5000 Hz to 25000 Hz
+
+results_df <- results_df %>%
+  filter(frequency >= 5000 & frequency <= 45000)
+
+# First 10 and last 10 frequencies spectral kurtosis values force to zero.
+
+results_df <- results_df %>%
+  mutate(
+    spectral_kurtosis = ifelse(
+      frequency %in%
+        c(head(unique_frequencies, 10), tail(unique_frequencies, 10)),
+      0,
+      spectral_kurtosis
+    )
+  )
+
+# 'fft' matrix equivalent (spectral kurtosis values)
+fft_matrix <- results_df %>%
+  pivot_wider(
+    id_cols = frequency,
+    names_from = day,
+    values_from = spectral_kurtosis
+  ) %>%
+  select(-frequency) %>%
+  as.matrix()
+
+# Normalize the entire matrix to a [0, 1] range
+min_fft <- min(fft_matrix, na.rm = TRUE)
+max_fft <- max(fft_matrix, na.rm = TRUE)
+fftn_matrix <- (fft_matrix - min_fft) / (max_fft - min_fft)
+
+# Create a vector of ones (equivalent to n = np.ones_like(f[0]))
+n <- rep(1, nrow(f_matrix))
+
+spectral_kurtosis <- results_df %>%
+  select(day, spectral_kurtosis) %>%
+  dplyr::group_by(day) %>%
+  dplyr::summarise(
+    SKMean = mean(spectral_kurtosis),
+    SKStd = sd(spectral_kurtosis),
+    SKSkewness = moments::skewness(spectral_kurtosis),
+    SKKurtosis = moments::kurtosis(spectral_kurtosis)
+  )
+
+# Display the first few rows and columns of the final normalized matrix
+print(fftn_matrix[1:5, 1:5])
+
+plot_data_3d <- results_df
+
+plot_ly(
+  data = plot_data_3d,
+  x = ~day,
+  y = ~frequency,
+  z = ~spectral_kurtosis,
+  type = "scatter3d",
+  mode = "lines",
+  # Color the points by their kurtosis value for better visualization
+  color = ~spectral_kurtosis,
+  split = ~day, # to get separate lines for each day,
+  showlegend = FALSE # shows legend only for spectral_kurtosis and not for day.
+  # ,
+  # # Make markers small and slightly transparent
+  # marker = list(size = 2, opacity = 0.6)
+) %>%
+  layout(
+    title = "Interactive 3D Spectral Kurtosis Plot",
+    scene = list(
+      xaxis = list(title = "Day"),
+      yaxis = list(title = "Frequency (Hz)"),
+      zaxis = list(title = "Spectral Kurtosis")
+    )
+  )
+```
+
+See if the mean values of spectral kurtosis per day trends according to the paper: 
+
+
+```{r}
+spectral_kurtosis_df <- results_df %>%
+  select(day, spectral_kurtosis) %>%
+  dplyr::group_by(day) %>%
+  dplyr::summarise(
+    SKMean = mean(spectral_kurtosis),
+    SKStd = sd(spectral_kurtosis),
+    SKSkewness = moments::skewness(spectral_kurtosis),
+    SKKurtosis = moments::kurtosis(spectral_kurtosis),
+    SKpeak2peak = max(spectral_kurtosis) - min(spectral_kurtosis),
+    SKmax = max(spectral_kurtosis)
+  )
+
+# Trend mean spectral kurtosis over days
+
+ggplot(spectral_kurtosis_df, aes(x = day, y = SKMean)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Mean Spectral Kurtosis Over Days",
+    x = "Day",
+    y = "Mean Spectral Kurtosis"
+  ) +
+  theme_minimal()
+
+# Trend max spectral kurtosis over days
+
+ggplot(spectral_kurtosis_df, aes(x = day, y = SKmax)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Max Spectral Kurtosis Over Days",
+    x = "Day",
+    y = "Max Spectral Kurtosis"
+  ) +
+  theme_minimal()
+
+# Trend std dev of spectral kurtosis over days
+
+ggplot(spectral_kurtosis_df, aes(x = day, y = SKStd)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Standard Deviation of Spectral Kurtosis Over Days",
+    x = "Day",
+    y = "Standard Deviation of Spectral Kurtosis"
+  ) +
+  theme_minimal()
+
+# Trend skewness of spectral kurtosis over days
+
+ggplot(spectral_kurtosis_df, aes(x = day, y = SKSkewness)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Skewness of Spectral Kurtosis Over Days",
+    x = "Day",
+    y = "Skewness of Spectral Kurtosis"
+  ) +
+  theme_minimal()
+
+# Trend kurtosis of spectral kurtosis over days
+
+ggplot(spectral_kurtosis_df, aes(x = day, y = SKKurtosis)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Kurtosis of Spectral Kurtosis Over Days",
+    x = "Day",
+    y = "Kurtosis of Spectral Kurtosis"
+  ) +
+  theme_minimal()
+
+# Trend peak-to-peak of spectral kurtosis over days
+
+ggplot(spectral_kurtosis_df, aes(x = day, y = SKpeak2peak)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Peak-to-Peak of Spectral Kurtosis Over Days",
+    x = "Day",
+    y = "Peak-to-Peak of Spectral Kurtosis"
+  ) +
+  theme_minimal()
+```
+
+
+Now plot the time domain features per day.
+
+```{r}
+time_domain_features_df <- df %>%
+  rowwise() %>%
+  mutate(
+    mean = mean(vibration),
+    std = sd(vibration),
+    skew = moments::skewness(vibration),
+    kurtosis = moments::kurtosis(vibration), # This is Pearson's kurtosis, same as fisher=False
+    peak2peak = max(vibration, na.rm = TRUE) - min(vibration, na.rm = TRUE),
+    rms = sqrt(mean(vibration^2, na.rm = TRUE)),
+
+    # Using max(abs()) is more robust for crest/impulse/margin factors
+    crestFactor = max(abs(vibration), na.rm = TRUE) / rms,
+    shapeFactor = rms / mean(abs(vibration), na.rm = TRUE),
+    impulseFactor = max(abs(vibration), na.rm = TRUE) /
+      mean(abs(vibration), na.rm = TRUE),
+    marginFactor = max(abs(vibration), na.rm = TRUE) /
+      (mean(abs(vibration), na.rm = TRUE)^2),
+    energy = sum(vibration^2, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  select(
+    day,
+    mean,
+    std,
+    skew,
+    kurtosis,
+    peak2peak,
+    rms,
+    crestFactor,
+    shapeFactor,
+    impulseFactor,
+    marginFactor,
+    energy
+  )
+
+# Trend mean over days
+
+ggplot(time_domain_features_df, aes(x = day, y = mean)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Mean of Vibration Over Days",
+    x = "Day",
+    y = "Mean of Vibration"
+  ) +
+  theme_minimal()
+
+# Trend std dev over days
+
+ggplot(time_domain_features_df, aes(x = day, y = std)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Standard Deviation of Vibration Over Days",
+    x = "Day",
+    y = "Standard Deviation of Vibration"
+  ) +
+  theme_minimal()
+
+# Trend skewness over days
+
+ggplot(time_domain_features_df, aes(x = day, y = skew)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Skewness of Vibration Over Days",
+    x = "Day",
+    y = "Skewness of Vibration"
+  ) +
+  theme_minimal()
+
+# Trend kurtosis over days
+
+ggplot(time_domain_features_df, aes(x = day, y = kurtosis)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Kurtosis of Vibration Over Days",
+    x = "Day",
+    y = "Kurtosis of Vibration"
+  ) +
+  theme_minimal()
+
+# Trend peak-to-peak over days
+
+ggplot(time_domain_features_df, aes(x = day, y = peak2peak)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Peak-to-Peak of Vibration Over Days",
+    x = "Day",
+    y = "Peak-to-Peak of Vibration"
+  ) +
+  theme_minimal()
+
+# Trend rms over days
+
+ggplot(time_domain_features_df, aes(x = day, y = rms)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "RMS of Vibration Over Days",
+    x = "Day",
+    y = "RMS of Vibration"
+  ) +
+  theme_minimal()
+```
+
+Plot spectral kurtosis vs frequency for a given day.
+
+```{r}
+day = 20 # Specify the day you want to plot
+
+plot_data_day <- results_df %>%
+  filter(day == !!day) # Filter for the specified day
+
+ggplot(plot_data_day, aes(x = frequency, y = spectral_kurtosis)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red', size = 2) +
+  labs(
+    title = paste("Spectral Kurtosis vs Frequency for Day", day),
+    x = "Frequency (Hz)",
+    y = "Spectral Kurtosis"
+  ) +
+  theme_minimal()
+```
+
+Monotonicity function. Note that this formula is only when 1 machine is monitored. When there are more, check the paper or MATLAB website for the formula.
+
+Monotonicity is a measure of how consistently a feature increases or decreases over time. A monotonicity value of 1 indicates a perfectly monotonic trend (either strictly increasing or strictly decreasing), while a value closer to 0 indicates a non-monotonic trend with frequent fluctuations.
+
+```{r}
+monotonicity <- function(x) {
+  n <- length(x)
+  if (n < 2) {
+    return(NA) # Not enough data to determine monotonicity
+  }
+
+  monotonicity <- abs(sum(sign(diff(x)) / (n - 1)))
+
+  return(monotonicity)
+}
+
+# Get the monotonicity of all columns of spectral_kurtosis_df
+
+(monotonicity_values_spectral_kurtosis <- sapply(
+  spectral_kurtosis_df[-1],
+  monotonicity
+)) # spectral_kurtosis_df[-1] removes the 'day' column
+
+(monotonicity_values_time_domain <- sapply(
+  time_domain_features_df[-1],
+  monotonicity
+)) # time_domain_features_df[-1] removes the 'day' column
+```
+
+Monotonicity for the mean of the spectral kurtosis is the highest at 0.368. The other features have lower monotonicity values. 
+
+Since I am going for a simple model, I want to use only the mean of the spectral kurtosis as my degradation signal. 
+
+Before doing that, there are a few things that the MATLAB tutorial does. It
+
+1. Applies a causal moving mean filter of window size 5 to all features.
+2. Combines all features into one dataframe.
+3. Standardizes all features by subtracting the mean and dividing by the standard deviation.
+4. Finds the principal components of the standardized features.
+5. Plots the first two principal components against each other.
+
+From the plot of the first two principal components in the MATLAB tutorial, the first principal component value increase over days. But this was for the compact dataset that MATLAB used. In my case, I found no such trend for the first principal component. Hence, I am sticking to the spectral kurtosis mean as my degradation signal. Moreover, it might be comparitively easier to elicit a failure threshold for the mean spectral kurtosis instead of a threshold for the first principal component. The next few code cells will implement the above steps for completeness.
+
+Causal moving mean filter. The reason we call it causal is because it uses only the current and past values to calculate the moving mean. It does not use future values. This is important for real-time applications where we want to predict the remaining useful life of a machine based on current and past data.
+
+```{r}
+causal_moving_mean_spectral_kurtosis <- as_tibble(sapply(
+  spectral_kurtosis_df[-1],
+  function(x) {
+    # stats::filter(x, rep(1 / 5, 5), sides = 1)
+    return(na.omit(stats::filter(x, rep(1 / 5, 5), sides = 1)))
+  }
+)) %>%
+  mutate(day = spectral_kurtosis_df$day[5:nrow(spectral_kurtosis_df)]) %>%
+  select(day, everything()) # Move 'day' column to the front
+
+causal_moving_mean_time_domain <- as_tibble(sapply(
+  time_domain_features_df[-1],
+  function(x) {
+    return(na.omit(stats::filter(x, rep(1 / 5, 5), sides = 1)))
+  }
+)) %>%
+  mutate(day = time_domain_features_df$day[5:nrow(time_domain_features_df)]) %>%
+  select(day, everything()) # Move 'day' column to the front
+```
+
+Get Monotonicity of causal moving mean filtered data
+
+```{r}
+# Get the monotonicity of all columns of spectral_kurtosis_df
+
+(monotonicity_values_spectral_kurtosis_filtered <- sapply(
+  causal_moving_mean_spectral_kurtosis,
+  monotonicity
+))
+
+(monotonicity_values_time_domain_filtered <- sapply(
+  causal_moving_mean_time_domain,
+  monotonicity
+))
+```
+
+Now combine all features into one dataframe.
+
+```{r}
+features_df <- bind_cols(
+  causal_moving_mean_time_domain,
+  causal_moving_mean_spectral_kurtosis
+)
+```
+
+standardize all features by subtracting the mean and dividing by the standard deviation. Then find the principal components of the standardized features using prcomp() function in R. Plot the first two principal components against each other, and also plot the first principal component against the day number.
+
+```{r}
+# features_df_scaled <- as_tibble(scale(features_df))
+
+# principal component analysis (PCA)
+
+pca_result <- prcomp(features_df, center = TRUE, scale. = TRUE)
+
+# Plot first two principal components
+pca_df <- as_tibble(pca_result$x) %>%
+  mutate(day = 1:nrow(features_df))
+
+ggplot(pca_df, aes(x = PC1, y = PC2, label = day)) +
+  geom_point(color = 'blue') +
+  geom_text(vjust = -0.5, size = 3) +
+  labs(
+    title = "PCA of Features",
+    x = "Principal Component 1",
+    y = "Principal Component 2"
+  ) +
+  theme_minimal()
+
+# Plot first principal component over days
+
+ggplot(pca_df, aes(x = day, y = PC1)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "First Principal Component Over Days",
+    x = "Day",
+    y = "Principal Component 1"
+  ) +
+  theme_minimal()
+
+# Plot second principal component over days
+
+ggplot(pca_df, aes(x = day, y = PC2)) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Second Principal Component Over Days",
+    x = "Day",
+    y = "Principal Component 2"
+  ) +
+  theme_minimal()
+
+```
+
+Neither of the principal components look very monotonic. 
+
+Plot the causal moving mean filtered mean spectral kurtosis as a function of days.
+
+```{r}
+# Plot causal moving mean filtered mean spectral kurtosis over days
+
+ggplot(
+  tibble(
+    day = spectral_kurtosis_df$day[5:nrow(spectral_kurtosis_df)],
+    SKMeanFiltered = causal_moving_mean_spectral_kurtosis$SKMean
+  ),
+  aes(x = day, y = SKMeanFiltered)
+) +
+  geom_line(color = 'blue') +
+  geom_point(color = 'red') +
+  labs(
+    title = "Causal Moving Mean Filtered Mean Spectral Kurtosis Over Days",
+    x = "Day",
+    y = "Causal Moving Mean Filtered Mean Spectral Kurtosis"
+  ) +
+  theme_minimal()
+```
+
+The mean spectral kurtosis looks much more monotonic. Note that X axis starts from day 5 because of the causal moving mean filter of window size 5. I will use this as my degradation signal.
+
+Next, I need to fit a degradation model to the degradation signal. I will use the exponential degradation model as given in the paper. The paper does a log transform of the degradation signal and then fits a linear model to it. I will do the same.
+
+Here is a summary of what the paper does and what the MATLAB tutorial does, and what I want to do:
+
+1. Take the natural logarithm of the degradation signal.
+2. Assume that theta.prime and beta are bivariate normally distributed.
+3. From the test on 25 bearings, the paper determines the prior bivariate normal distribution for theta.prime and beta. They also get the error variance sigma^2 from the test on 25 bearings.
+4. Since we do not have data from 25 bearings, I will assume non informative priors, just like the MATLAB tutorial suggests. I will let a simple linear regression model determine the priors, as well as the error variance sigma^2. This simple linear regression model is based on the first 20 days of data.
+5. Every day I get a new signal, I will update the priors using Bayesian updating. The paper has closed form equations for Bayesian updating of the priors. I will use those equations. 
+6. OPTIONAL: I also want to use MCMC to get the posterior distribution of theta.prime and beta. I will use the rstan package for this. The paper does not use MCMC, but I want to see how the results compare. UPDATE: No. I will stick with the conjugate priors and closed form equations for Bayesian updating. 
+7. The parameters of the posterior distribution will be used to calculate the RUL distribution. The paper has closed form equations for calculating the RUL distribution. I will use those equations.
+8. The steps need to be repeated every day until day 50.
+9 Plot the RUL distribution every day.
+
+HERE WE GO! 
+
+```{r}
+# Fit a simple linear regression model to the log of the mean spectral kurtosis for the first 20 days of data
+
+initial_days <- 20
+# degradation_signal <- spectral_kurtosis_df$SKMean[1:initial_days]
+# days <- 1:initial_days
+
+# Fit a linear model to the log of causal moving mean filtered mean spectral kurtosis for the first 20 days of data
+
+degradation_signal <- causal_moving_mean_spectral_kurtosis$SKMean[which(
+  causal_moving_mean_spectral_kurtosis$day <= initial_days
+)]
+days <- causal_moving_mean_spectral_kurtosis$day[which(
+  causal_moving_mean_spectral_kurtosis$day <= initial_days
+)]
+
+# degradation_signal <- causal_moving_mean_spectral_kurtosis$SKMean[1:initial_days]
+# degradation_signal <- causal_moving_mean_spectral_kurtosis$SKMean[which()]
+# days <- 5:(4 + length(degradation_signal)) # Because of the causal moving mean filter of window size 5
+
+log_degradation_signal <- log(degradation_signal)
+
+# Create a dataframe for the degradation signal
+degradation_data <- tibble(
+  time = days,
+  L_t = log_degradation_signal
+)
+
+linear_model <- lm(log_degradation_signal ~ days)
+summary(linear_model)
+
+# Extract coefficients
+# The intercept corresponds to θ' = log(θ - sigma.squared/2)
+# The slope corresponds to β
+theta_prime_est <- coef(linear_model)[1]
+beta_est <- coef(linear_model)[2]
+
+# Print a summary of the model fit
+print(summary(linear_model))
+cat("\n--------------------------------------------------\n")
+cat("\nEstimated Beta (from smoothed data):", beta_est, "\n\n")
+cat("\nEstimated Theta' (from smoothed data):", theta_prime_est, "\n")
+cat("--------------------------------------------------\n")
+
+
+# --- 6. Visualize the Results ---
+# A plot helps to intuitively understand the effect of smoothing.
+ggplot(degradation_data, aes(x = time)) +
+  # Plot the raw, noisy logged data
+  geom_point(aes(y = L_t, color = "Raw Logged Signal"), alpha = 0.5, size = 2) +
+  # Add the linear regression line based on the smoothed data
+  geom_abline(
+    intercept = theta_prime_est,
+    slope = beta_est,
+    aes(color = "Fitted Linear Model"),
+    linetype = "dashed",
+    size = 1
+  ) +
+  # Add labels and a title
+  labs(
+    title = "Linear model fit to logged degradation signal",
+    # subtitle = "Fitting a linear model to the smoothed data",
+    x = "Day",
+    y = "Logged Mean Spectral Kurtosis, L(t)"
+  ) +
+  # Customize colors and legend
+  scale_color_manual(
+    name = "Data Series",
+    values = c(
+      "Raw Logged Signal" = "gray70",
+      "Fitted Linear Model" = "red"
+    )
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+```
+
+Note that I have assumed phi to be zero, just like the paper does. In the paper, phi is the average degradation signal from a normally operating bearing. Think of phi as the Y-intercept from where the exponential degradation starts. My spectral kurtosis on day 1 is 0.0002 and on day 50 is 0.2450. Now, 0.245 is 1225 times 0.0002. So, I can safely assume that phi is zero. This is for the spectral kurtosis mean.
+
+If I use the causal moving mean filtered mean spectral kurtosis as my degradation signal, even then the phi can be zero. The causal moving mean filtered mean spectral kurtosis on day 5 is 0.0081 and on day 50 is 0.1891. Now, 0.1891 is 24 times 0.0081. So, I can safely assume that phi is zero.
+
+Note that the residual standard error with the causal moving mean filtered mean spectral kurtosis is 0.2265, which is much lower than the residual standard error of around 0.9 without the causal moving mean filter. So, the causal moving mean filter has helped in getting a better fit. Of course, the causal moving mean filter has introduced a lag of 5 days. But, I can live with that. It has also caused the issue of what to use as the threshold for failure. I will use the causal moving mean filtered mean spectral kurtosis value on day 50 as the threshold for failure. This is 0.1891.
+
+Now, code the priors and the Bayesian updating equations from the paper.
+
+```{r}
+#' Calculate Posterior Parameters for Exponential Degradation Model
+#'
+#' This function implements the Bayesian updating equations for a bivariate
+#' normal distribution as described in the provided images. It calculates
+#' the posterior means, variances, and correlation coefficient.
+#'
+#' @param L A numeric vector of observed logged signal values (L_1, ..., L_k).
+#' @param t A numeric vector of time points corresponding to the L values.
+#' @param mu_0_prime The prior mean of theta'.
+#' @param mu_1 The prior mean of beta.
+#' @param sigma_0_sq The prior variance of theta'.
+#' @param sigma_1_sq The prior variance of beta.
+#' @param rho_0 The prior correlation coefficient between theta' and beta.
+#' @param sigma_sq The variance of the random error term.
+#'
+#' @return A list containing the posterior parameters: mu_theta_prime, mu_beta,
+#'         sigma_theta_prime_sq, sigma_beta_sq, rho, as well as the
+#'         intermediate calculations X, Y, and M.
+
+calculate_posterior_params <- function(
+  L,
+  t,
+  mu_0_prime,
+  mu_1,
+  sigma_0_sq,
+  sigma_1_sq,
+  rho_0,
+  sigma_sq
+) {
+  # Ensure vectors are of the same length
+  if (length(L) != length(t)) {
+    stop("Vectors 'L' and 't' must be of the same length.")
+  }
+
+  # --- 1. Initial Calculations & Sums ---
+  k <- length(L)
+  sigma_0 <- sqrt(sigma_0_sq)
+  sigma_1 <- sqrt(sigma_1_sq)
+
+  sum_t <- sum(t)
+  sum_t_sq <- sum(t^2)
+  sum_L <- sum(L)
+  sum_Lt <- sum(L * t)
+
+  # --- 2. Calculate Intermediate Variables X, Y, M ---
+  X <- k * (1 - rho_0^2) * sigma_0_sq + sigma_sq
+  Y <- (1 - rho_0^2) * sigma_1_sq * sum_t_sq + sigma_sq
+  M <- (1 - rho_0^2) * sigma_0 * sigma_1 * sum_t - rho_0 * sigma_sq
+
+  # --- 3. Calculate Posterior Parameters ---
+  common_denominator <- (X * Y - M^2)
+
+  # Posterior Mean of theta'
+  num_mu_theta <- mu_0_prime *
+    sigma_sq *
+    sigma_1 *
+    (Y + M * rho_0) -
+    mu_1 * sigma_sq * sigma_0 * (Y * rho_0 + M) +
+    (1 - rho_0^2) *
+      sigma_0 *
+      sigma_1 *
+      (Y * sigma_0 * sum_L - M * sigma_1 * sum_Lt)
+  mu_theta_prime <- num_mu_theta / (sigma_1 * common_denominator)
+
+  # Posterior Mean of beta
+  num_mu_beta <- mu_1 *
+    sigma_sq *
+    sigma_0 *
+    (X + M * rho_0) -
+    mu_0_prime * sigma_sq * sigma_1 * (X * rho_0 + M) +
+    (1 - rho_0^2) *
+      sigma_0 *
+      sigma_1 *
+      (X * sigma_1 * sum_Lt - M * sigma_0 * sum_L)
+  mu_beta <- num_mu_beta / (sigma_0 * common_denominator)
+
+  # Posterior Variance of theta'
+  num_sigma_theta_sq <- Y * (1 - rho_0^2) * sigma_sq * sigma_0_sq
+  sigma_theta_prime_sq <- num_sigma_theta_sq / common_denominator
+
+  # Posterior Variance of beta
+  num_sigma_beta_sq <- X * (1 - rho_0^2) * sigma_sq * sigma_1_sq
+  sigma_beta_sq <- num_sigma_beta_sq / common_denominator
+
+  # Posterior Correlation Coefficient
+  rho <- -M / sqrt(X * Y)
+
+  # --- 4. Return Results ---
+  return(
+    list(
+      X = X,
+      Y = Y,
+      M = M,
+      mu_theta_prime = mu_theta_prime,
+      mu_beta = mu_beta,
+      sigma_theta_prime_sq = sigma_theta_prime_sq,
+      sigma_beta_sq = sigma_beta_sq,
+      rho = rho
+    )
+  )
+}
+```
+
+Set my weakly informative priors. Find the posterior parameters.
+
+```{r}
+mu_0_prime <- 1 # Prior mean of theta'
+mu_1 <- 1 # Prior mean of beta
+sigma_0_sq <- 1e6 # Prior variance of theta'
+sigma_1_sq <- 1e6 # Prior variance of beta
+rho_0 <- 0 # Prior correlation coefficient between theta' and beta
+sigma_sq <- summary(linear_model)$sigma^2 # Variance of the random error term from the linear model
+# sigma_sq <- 0.1^2 # Just to see the effect of MATLAB assumed variance of 0.1^2
+
+up_to <- 20
+# L <- c(log(causal_moving_mean_spectral_kurtosis$SKMean[1:up_to]))
+# # L <- c(log(spectral_kurtosis_df$SKMean[1:up_to]))
+# t <- c(1:up_to)
+
+L <- log(causal_moving_mean_spectral_kurtosis$SKMean[which(
+  causal_moving_mean_spectral_kurtosis$day <= up_to
+)])
+t <- causal_moving_mean_spectral_kurtosis$day[which(
+  causal_moving_mean_spectral_kurtosis$day <= up_to
+)]
+
+posterior_results <- calculate_posterior_params(
+  L = L,
+  t = t,
+  mu_0_prime = mu_0_prime,
+  mu_1 = mu_1,
+  sigma_0_sq = sigma_0_sq,
+  sigma_1_sq = sigma_1_sq,
+  rho_0 = rho_0,
+  sigma_sq = sigma_sq
+)
+
+# Assuming 'posterior_results' is the output from the function I gave you
+# For the parameter mu_beta:
+
+# 1. Get the posterior mean and variance
+post_mean_beta <- posterior_results$mu_beta
+post_var_beta <- posterior_results$sigma_beta_sq
+
+# 2. Calculate the posterior standard deviation
+post_sd_beta <- sqrt(post_var_beta)
+
+# 3. Calculate the 95% Credible Interval
+z_score <- 1.96
+lower_bound <- post_mean_beta - z_score * post_sd_beta
+upper_bound <- post_mean_beta + z_score * post_sd_beta
+
+# 4. Print the results
+print(paste("Posterior Mean for beta:", round(post_mean_beta, 5)))
+print(paste(
+  "95% Credible Interval for beta: [",
+  round(lower_bound, 5),
+  ", ",
+  round(upper_bound, 5),
+  "]"
+))
+
+# 5. Check if the interval contains zero
+if (lower_bound > 0 | upper_bound < 0) {
+  print(
+    "The 95% Credible Interval does NOT contain zero. The parameter is credibly different from zero."
+  )
+} else {
+  print(
+    "The 95% Credible Interval CONTAINS zero. A value of zero is plausible for this parameter."
+  )
+}
+
+
+```
+
+Find the RUL distribution and then plot it.
+
+```{r}
+#' Helper function to calculate the intermediate term g(t)
+#'
+#' Implements the g(t) function based on Equations (8) and (9) from the paper[cite: 205, 209].
+#' This is used by both the CDF and PDF calculations.
+#'
+#' @param t A numeric vector of future time points (residual life).
+#' @param t_k The current operating time.
+#' @param D The failure threshold for the logged signal.
+#' @param posterior_params A list containing the posterior parameters.
+#' @param sigma_sq The variance of the random error term.
+#' @return A numeric vector of g(t) values.
+
+calculate_g_t <- function(t, t_k, D, posterior_params, sigma_sq) {
+  # Extract posterior parameters
+  mu_theta <- posterior_params$mu_theta_prime
+  mu_beta <- posterior_params$mu_beta
+  var_theta <- posterior_params$sigma_theta_prime_sq
+  var_beta <- posterior_params$sigma_beta_sq
+  rho <- posterior_params$rho
+
+  sd_theta <- sqrt(var_theta)
+  sd_beta <- sqrt(var_beta)
+
+  t_future <- t + t_k
+
+  # Mean and variance of the future degradation signal L(t + t_k) [cite: 205]
+  mu_tilde <- mu_theta + mu_beta * t_future
+  sigma_tilde_sq <- var_theta +
+    (t_future^2 * var_beta) +
+    sigma_sq +
+    (2 * rho * t_future * sd_theta * sd_beta)
+
+  # Calculate g(t) [cite: 209]
+  g_t <- (mu_tilde - D) / sqrt(sigma_tilde_sq)
+  return(g_t)
+}
+
+#' Calculate the Truncated CDF of the Residual Life
+#'
+#' Implements the truncated Cumulative Distribution Function from Equation (11)[cite: 213].
+#'
+#' @param t A numeric vector of future time points (residual life).
+#' @param t_k The current operating time.
+#' @param D The failure threshold for the logged signal.
+#' @param posterior_params A list containing the posterior parameters.
+#' @param sigma_sq The variance of the random error term.
+#' @return A numeric vector of the CDF values for each time point in t.
+
+calculate_residual_life_cdf <- function(t, t_k, D, posterior_params, sigma_sq) {
+  g_of_t <- calculate_g_t(t, t_k, D, posterior_params, sigma_sq)
+  g_of_0 <- calculate_g_t(0, t_k, D, posterior_params, sigma_sq)
+
+  # Truncated CDF formula [cite: 213]
+  numerator <- pnorm(g_of_t) - pnorm(g_of_0)
+  denominator <- 1 - pnorm(g_of_0)
+
+  # Avoid division by zero if the probability of surviving past t=0 is negligible
+  # cdf <- ifelse(denominator < 1e-9, 1, numerator / denominator)
+
+  cdf <- numerator / denominator
+
+  return(cdf)
+}
+
+
+#' Calculate the Truncated PDF of the Residual Life
+#'
+#' Implements the truncated Probability Density Function from Equation (12)[cite: 310].
+#'
+#' @param t A numeric vector of future time points (residual life).
+#' @param t_k The current operating time.
+#' @param D The failure threshold for the logged signal.
+#' @param posterior_params A list containing the posterior parameters.
+#' @param sigma_sq The variance of the random error term.
+#' @return A numeric vector of the PDF values for each time point in t.
+
+calculate_residual_life_pdf <- function(t, t_k, D, posterior_params, sigma_sq) {
+  g_of_t <- calculate_g_t(t, t_k, D, posterior_params, sigma_sq)
+  g_of_0 <- calculate_g_t(0, t_k, D, posterior_params, sigma_sq)
+
+  # --- Calculate the derivative g'(t) ---
+  # Extract posterior parameters
+  mu_beta <- posterior_params$mu_beta
+  var_beta <- posterior_params$sigma_beta_sq
+  rho <- posterior_params$rho
+  sd_theta <- sqrt(posterior_params$sigma_theta_prime_sq)
+  sd_beta <- sqrt(var_beta)
+
+  # Components of the g'(t) calculation using the quotient rule
+  t_future <- t + t_k
+  u_t <- posterior_params$mu_theta_prime +
+    posterior_params$mu_beta * t_future -
+    D
+  v_t_sqrt <- sqrt(
+    posterior_params$sigma_theta_prime_sq +
+      (t_future^2 * var_beta) +
+      sigma_sq +
+      (2 * rho * t_future * sd_theta * sd_beta)
+  )
+
+  u_prime_t <- mu_beta
+  v_prime_t <- (2 * t_future * var_beta) + (2 * rho * sd_theta * sd_beta)
+
+  g_prime_t <- (u_prime_t * v_t_sqrt - u_t * (v_prime_t / (2 * v_t_sqrt))) /
+    (v_t_sqrt^2)
+
+  # --- Truncated PDF formula [cite: 310] ---
+  numerator <- dnorm(g_of_t) * g_prime_t
+  denominator <- 1 - pnorm(g_of_0)
+
+  # pdf <- ifelse(denominator < 1e-9, 0, numerator / denominator)
+  pdf <- numerator / denominator
+
+  return(pdf)
+}
+
+#' Calculate the Median of the Residual Life Distribution
+#'
+#' Finds the median by numerically finding the root of the equation CDF(t) - 0.5 = 0
+#' using the uniroot() function.
+#'
+#' @param t_k The current operating time.
+#' @param D The failure threshold for the logged signal.
+#' @param posterior_params A list containing the posterior parameters.
+#' @param sigma_sq The variance of the random error term.
+#' @param search_interval A vector of two numbers defining the interval to search for the median.
+#' @return The median residual life.
+
+calculate_median_residual_life <- function(
+  t_k,
+  D,
+  posterior_params,
+  sigma_sq,
+  search_interval = c(0, 5000)
+) {
+  # Define the function whose root we want to find: CDF(t) - 0.5
+  root_function <- function(t) {
+    calculate_residual_life_cdf(t, t_k, D, posterior_params, sigma_sq) - 0.5
+  }
+
+  # Use uniroot to find the value of t where the function is zero
+  # The tryCatch block handles cases where a root might not be found in the interval
+  result <- tryCatch(
+    {
+      uniroot(root_function, interval = search_interval)$root
+    },
+    error = function(e) {
+      NA # Return NA if no root is found
+    }
+  )
+
+  return(result)
+}
+
+#' Calculate a Specific Percentile of the Residual Life Distribution
+#'
+#' Finds a given percentile by numerically finding the root of CDF(t) - p = 0.
+#'
+#' @param p The desired percentile (e.g., 0.025 for the 2.5th percentile).
+#' @param t_k The current operating time.
+#' @param D The failure threshold for the logged signal.
+#' @param posterior_params A list containing the posterior parameters.
+#' @param sigma_sq The variance of the random error term.
+#' @return The residual life at the specified percentile.
+
+calculate_percentile_rul <- function(
+  p,
+  t_k,
+  D,
+  posterior_params,
+  sigma_sq,
+  search_interval = c(0, 5000)
+) {
+  # Define the function whose root we want to find: CDF(t) - p
+  root_function <- function(t) {
+    calculate_residual_life_cdf(t, t_k, D, posterior_params, sigma_sq) - p
+  }
+
+  # Use uniroot to find the value of t where the function is zero
+  result <- tryCatch(
+    {
+      uniroot(root_function, interval = search_interval)$root
+    },
+    error = function(e) {
+      NA
+    }
+  )
+
+  return(result)
+}
+
+```
+
+Update posterior parameters
+```{r}
+# Loop through day 20 to day 50. Store all ggplot objects in a list and then use patchwork to plot them together.
+
+i <- 20
+plot_list <- list()
+
+
+while (i <= 50) {
+  # Update posterior parameters and then calculate RUL distribution.
+
+  up_to <- i
+  # L <- c(log(causal_moving_mean_spectral_kurtosis$SKMean[1:up_to]))
+  # # L <- c(log(spectral_kurtosis_df$SKMean[1:up_to]))
+  # t <- c(1:up_to)
+  L <- log(causal_moving_mean_spectral_kurtosis$SKMean[which(
+    causal_moving_mean_spectral_kurtosis$day <= up_to
+  )])
+  t <- causal_moving_mean_spectral_kurtosis$day[which(
+    causal_moving_mean_spectral_kurtosis$day <= up_to
+  )]
+
+  posterior_results <- calculate_posterior_params(
+    L = L,
+    t = t,
+    mu_0_prime = mu_0_prime,
+    mu_1 = mu_1,
+    sigma_0_sq = sigma_0_sq,
+    sigma_1_sq = sigma_1_sq,
+    rho_0 = rho_0,
+    sigma_sq = sigma_sq
+  )
+
+  t_k <- up_to # Current operating time (day 10)
+  t <- seq(0, 1000, by = 1) # Future time points (residual life)
+  true_residual_life <- 50 - t_k # True residual life from the dataset
+  # t <- 20
+  D <- log(0.1891) # Failure threshold for the logged signal (using the causal moving mean filtered mean spectral kurtosis on day 50)
+  rul_cdf <- calculate_residual_life_cdf(t, t_k, D, posterior_results, sigma_sq)
+  rul_pdf <- calculate_residual_life_pdf(t, t_k, D, posterior_results, sigma_sq)
+
+  # Plot the RUL CDF
+  rul_df <- tibble(
+    residual_life = t,
+    CDF = rul_cdf,
+    PDF = rul_pdf
+  )
+
+  median_rul <- calculate_median_residual_life(
+    t_k,
+    D,
+    posterior_results,
+    sigma_sq
+  )
+
+  # --- NEW: Calculate the 95% interval boundaries ---
+  lower_95 <- calculate_percentile_rul(
+    0.025,
+    t_k,
+    D,
+    posterior_results,
+    sigma_sq
+  )
+  upper_95 <- calculate_percentile_rul(
+    0.975,
+    t_k,
+    D,
+    posterior_results,
+    sigma_sq
+  )
+  # --------------------------------------------------
+
+  # Corrected ggplot code
+  p <- ggplot(rul_df, aes(x = residual_life)) +
+    # NEW: Add the shaded area for the 95% region
+    geom_area(
+      data = filter(
+        rul_df,
+        residual_life >= !!lower_95 & residual_life <= !!upper_95
+      ),
+      aes(y = PDF, fill = "95% Credible Interval"), # MODIFIED: Mapped fill to a name
+      alpha = 0.5
+    ) +
+    # This part is for the PDF line and its legend
+    geom_line(aes(y = PDF, color = "PDF"), size = 1) +
+    scale_color_manual(name = NULL, values = c("PDF" = "red")) +
+
+    # --- CORRECTED PART ---
+    # Map linetype to a NAME, not a value
+    geom_vline(
+      aes(xintercept = !!median_rul, linetype = "Median RUL"),
+      color = "green",
+      size = 1
+    ) +
+    geom_vline(
+      aes(xintercept = !!true_residual_life, linetype = "True RUL"),
+      color = "black",
+      size = 1
+    ) +
+
+    # This scale now correctly finds the names "Median RUL" and "True RUL"
+    scale_linetype_manual(
+      name = "Reference Lines",
+      values = c("Median RUL" = "dashed", "True RUL" = "dashed")
+    ) +
+
+    # This guide now correctly overrides the colors for the linetype legend
+    guides(
+      linetype = guide_legend(override.aes = list(color = c("green", "black")))
+    ) +
+    # --------------------
+    # NEW: Add a scale for the fill aesthetic to create its legend item
+    scale_fill_manual(
+      name = NULL,
+      values = c("95% Credible Interval" = "lightcoral")
+    ) +
+
+    labs(
+      title = paste("Residual Life Distribution on Day", t_k),
+      subtitle = paste(
+        "Median RUL:",
+        round(median_rul, 2),
+        "; True RUL:",
+        true_residual_life
+      ),
+      x = "Residual Life (Days)",
+      y = "Probability Density"
+    ) +
+    coord_cartesian(xlim = c(0, 70)) +
+    theme_minimal() +
+    theme(
+      legend.position = "right",
+      panel.grid.major = element_blank(), # Remove major grid lines
+      panel.grid.minor = element_blank(), # Remove minor grid lines
+      axis.text = element_text(size = 12)
+    ) # Increase axis number size)
+
+  plot_list <- append(plot_list, list(p))
+
+  i <- i + 1
+}
+```
+
+Animate
+
+```{r}
+library(animation)
+
+# Use saveGIF to create the animation from your list of plots
+saveGIF(
+  {
+    # This loop iterates through your list and prints each plot.
+    # saveGIF captures each printed plot as a frame in the animation.
+    for (p in plot_list) {
+      print(p)
+    }
+  },
+  movie.name = "rul_animation.gif", # The name of the output file
+  interval = 0.5, # Time delay between frames in seconds
+  ani.width = 800, # Width of the GIF in pixels
+  ani.height = 600
+) # Height of the GIF in pixels
+```
+
+Try adding logo
+
+```{r}
+# install.packages("jpeg")
+# install.packages("ggplot2")
+# install.packages("cowplot")
+
+library(jpeg)
+library(cowplot)
+
+# Loop through day 20 to day 50. Store all ggplot objects in a list and then use patchwork to plot them together.
+
+i <- 20
+plot_list <- list()
+
+logo_path <- "Calgary Analytics.jpg"
+logo <- readJPEG(logo_path)
+
+
+while (i <= 50) {
+  # Update posterior parameters and then calculate RUL distribution.
+
+  up_to <- i
+  # L <- c(log(causal_moving_mean_spectral_kurtosis$SKMean[1:up_to]))
+  # # L <- c(log(spectral_kurtosis_df$SKMean[1:up_to]))
+  # t <- c(1:up_to)
+  L <- log(causal_moving_mean_spectral_kurtosis$SKMean[which(
+    causal_moving_mean_spectral_kurtosis$day <= up_to
+  )])
+  t <- causal_moving_mean_spectral_kurtosis$day[which(
+    causal_moving_mean_spectral_kurtosis$day <= up_to
+  )]
+
+  posterior_results <- calculate_posterior_params(
+    L = L,
+    t = t,
+    mu_0_prime = mu_0_prime,
+    mu_1 = mu_1,
+    sigma_0_sq = sigma_0_sq,
+    sigma_1_sq = sigma_1_sq,
+    rho_0 = rho_0,
+    sigma_sq = sigma_sq
+  )
+
+  t_k <- up_to # Current operating time (day 10)
+  t <- seq(0, 1000, by = 0.1) # Future time points (residual life)
+  true_residual_life <- 50 - t_k # True residual life from the dataset
+  # t <- 20
+  D <- log(0.1891) # Failure threshold for the logged signal (using the causal moving mean filtered mean spectral kurtosis on day 50)
+  rul_cdf <- calculate_residual_life_cdf(t, t_k, D, posterior_results, sigma_sq)
+  rul_pdf <- calculate_residual_life_pdf(t, t_k, D, posterior_results, sigma_sq)
+
+  # Plot the RUL CDF
+  rul_df <- tibble(
+    residual_life = t,
+    CDF = rul_cdf,
+    PDF = rul_pdf
+  )
+
+  median_rul <- calculate_median_residual_life(
+    t_k,
+    D,
+    posterior_results,
+    sigma_sq
+  )
+
+  # --- NEW: Calculate the 95% interval boundaries ---
+  lower_95 <- calculate_percentile_rul(
+    0.025,
+    t_k,
+    D,
+    posterior_results,
+    sigma_sq
+  )
+  upper_95 <- calculate_percentile_rul(
+    0.975,
+    t_k,
+    D,
+    posterior_results,
+    sigma_sq
+  )
+  # --------------------------------------------------
+
+  # Corrected ggplot code
+  p <- ggplot(rul_df, aes(x = residual_life)) +
+    # NEW: Add the shaded area for the 95% region
+    geom_area(
+      data = filter(
+        rul_df,
+        residual_life >= !!lower_95 & residual_life <= !!upper_95
+      ),
+      aes(y = PDF, fill = "95% Credible Interval"), # MODIFIED: Mapped fill to a name
+      alpha = 0.5
+    ) +
+    # This part is for the PDF line and its legend
+    geom_line(aes(y = PDF, color = "PDF"), size = 1) +
+    scale_color_manual(name = NULL, values = c("PDF" = "red")) +
+
+    # --- CORRECTED PART ---
+    # Map linetype to a NAME, not a value
+    geom_vline(
+      aes(xintercept = !!median_rul, linetype = "Median RUL"),
+      color = "green",
+      size = 1
+    ) +
+    geom_vline(
+      aes(xintercept = !!true_residual_life, linetype = "True RUL"),
+      color = "black",
+      size = 1
+    ) +
+
+    # This scale now correctly finds the names "Median RUL" and "True RUL"
+    scale_linetype_manual(
+      name = "Reference Lines",
+      values = c("Median RUL" = "dashed", "True RUL" = "dashed")
+    ) +
+
+    # This guide now correctly overrides the colors for the linetype legend
+    guides(
+      linetype = guide_legend(override.aes = list(color = c("green", "black")))
+    ) +
+    # --------------------
+    # NEW: Add a scale for the fill aesthetic to create its legend item
+    scale_fill_manual(
+      name = NULL,
+      values = c("95% Credible Interval" = "lightcoral")
+    ) +
+
+    labs(
+      title = paste("Residual Life Distribution on Day", t_k),
+      subtitle = paste(
+        "Median RUL:",
+        round(median_rul, 2),
+        "; True RUL:",
+        true_residual_life
+      ),
+      x = "Residual Life (Days)",
+      y = "Probability Density"
+    ) +
+    coord_cartesian(xlim = c(0, 70)) +
+    theme_minimal() +
+    theme(
+      legend.position = "right",
+      panel.grid.major = element_blank(), # Remove major grid lines
+      panel.grid.minor = element_blank(), # Remove minor grid lines
+      axis.text = element_text(size = 18), # Increase axis number size
+      axis.title = element_text(size = 16), # Increase axis title size
+      plot.title = element_text(size = 20, face = "bold"), # Increase title size
+      plot.subtitle = element_text(size = 16), # Increase subtitle size
+      legend.text = element_text(size = 14), # Increase legend text size
+      legend.title = element_text(size = 14) # Increase legend title size
+    )
+
+  # --- NEW: Add the logo to the plot ---
+  plot_with_logo <- ggdraw() +
+    draw_plot(p) +
+    draw_image(
+      logo, # The logo image object
+      x = 0.95, # X position (from 0 to 1)
+      y = 1, # Y position (from 0 to 1)
+      hjust = 1, # Horizontal justification (1 = right-aligned)
+      vjust = 1, # Vertical justification (1 = top-aligned)
+      width = 0.4, # Logo width as a fraction of plot width
+      height = 0.4 # Logo height as a fraction of plot height
+    )
+  # ------------------------------------
+
+  # Save the final plot (with the logo) to the list
+  plot_list <- append(plot_list, list(plot_with_logo))
+
+  i <- i + 1
+}
+
+print(plot_list[[10]]) # Print a plot to check
+
+library(animation)
+
+# Use saveGIF to create the animation from your list of plots
+saveGIF(
+  {
+    # This loop iterates through your list and prints each plot.
+    # saveGIF captures each printed plot as a frame in the animation.
+    for (p in plot_list) {
+      print(p)
+    }
+  },
+  movie.name = "rul_animation_with_logo.gif", # The name of the output file
+  interval = 0.5, # Time delay between frames in seconds
+  ani.width = 800, # Width of the GIF in pixels
+  ani.height = 600
+) # Height of the GIF in pixels
+```
+
+ROUGH
+
+```{r}
+# Corrected ggplot code
+ggplot(rul_df, aes(x = residual_life)) +
+  # This part is for the PDF line and its legend
+  geom_line(aes(y = PDF, color = "PDF"), size = 1) +
+  scale_color_manual(name = NULL, values = c("PDF" = "red")) +
+
+  # --- CORRECTED PART ---
+  # Map linetype to a NAME, not a value
+  geom_vline(
+    aes(xintercept = median_rul, linetype = "Median RUL"),
+    color = "green"
+  ) +
+  geom_vline(
+    aes(xintercept = true_residual_life, linetype = "True RUL"),
+    color = "black"
+  ) +
+
+  # This scale now correctly finds the names "Median RUL" and "True RUL"
+  scale_linetype_manual(
+    name = "Reference Lines",
+    values = c("Median RUL" = "dashed", "True RUL" = "dashed")
+  ) +
+
+  # This guide now correctly overrides the colors for the linetype legend
+  guides(
+    linetype = guide_legend(override.aes = list(color = c("green", "black")))
+  ) +
+  # --------------------
+
+  labs(
+    title = paste("Residual Life Distribution on Day", t_k),
+    subtitle = paste(
+      "Median RUL:",
+      round(median_rul, 2),
+      "; True RUL:",
+      true_residual_life
+    ),
+    x = "Residual Life (Days)",
+    y = "Probability Density"
+  ) +
+  coord_cartesian(xlim = c(0, 70)) +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+ggplot(rul_df, aes(x = residual_life)) +
+  # geom_line(aes(y = CDF, color = "CDF"), size = 1) +
+  geom_line(aes(y = PDF, color = "PDF"), size = 1) +
+  geom_vline(
+    aes(xintercept = median_rul, linetype = "dashed"),
+    color = "green"
+  ) +
+  geom_vline(
+    aes(
+      xintercept = true_residual_life,
+      linetype = "dashed"
+    ),
+    color = "black"
+  ) +
+  # Define the labels and linetypes for the 'linetype' legend
+  scale_linetype_manual(
+    name = "Reference Lines", # Legend title
+    values = c("Median RUL" = "dashed", "True RUL" = "dashed")
+  ) +
+
+  # Use guides() to correctly color the linetype legend
+  guides(
+    linetype = guide_legend(override.aes = list(color = c("green", "black")))
+  ) +
+  labs(
+    title = paste(
+      "Residual Life Distribution on Day",
+      t_k
+    ),
+    subtitle = paste(
+      "Median RUL:",
+      round(median_rul, 2),
+      "; True RUL:",
+      true_residual_life
+    ),
+    x = "Residual Life (Days)",
+    y = "Probability Density" #,
+    # color = "Distribution"
+  ) +
+  # scale_color_manual(values = c("CDF" = "blue", "PDF" = "red")) +
+  xlim(0, 70) +
+  theme_minimal() +
+  theme(legend.position = "right") # Explicitly set legend position
+```
+
+```{r}
+library(ggplot2)
+
+# Create some sample data for a runnable example
+t_k <- 150
+median_rul <- 35
+true_residual_life <- 42
+rul_df <- data.frame(
+  residual_life = seq(0, 100, by = 0.1)
+)
+rul_df$PDF <- dnorm(rul_df$residual_life, mean = median_rul, sd = 10)
+# Simple normalization to make the area approx 1 for the example
+rul_df$PDF <- rul_df$PDF / (sum(rul_df$PDF) * 0.1)
+
+
+# ggplot code modified to produce a legend
+ggplot(rul_df, aes(x = residual_life)) +
+  # Map the PDF line to the color "PDF"
+  geom_line(aes(y = PDF, color = "PDF"), size = 1) +
+
+  # Map the vlines to the linetype aesthetic
+  geom_vline(
+    aes(xintercept = median_rul, linetype = "Median RUL"),
+    color = "darkgreen"
+  ) +
+  geom_vline(
+    aes(xintercept = true_residual_life, linetype = "True RUL"),
+    color = "black"
+  ) +
+
+  # --- MANAGE LEGENDS AND SCALES ---
+  # Define the labels and colors for the 'color' legend
+  scale_color_manual(
+    name = NULL, # No title for the color legend
+    values = c("PDF" = "red")
+  ) +
+
+  # Define the labels and linetypes for the 'linetype' legend
+  scale_linetype_manual(
+    name = "Reference Lines", # Legend title
+    values = c("Median RUL" = "dashed", "True RUL" = "dashed")
+  ) +
+
+  # Use guides() to correctly color the linetype legend
+  guides(
+    linetype = guide_legend(
+      override.aes = list(color = c("darkgreen", "black"))
+    )
+  ) +
+  # -----------------------------------
+
+  labs(
+    title = paste("Residual Life Distribution on Day", t_k),
+    subtitle = paste(
+      "Median RUL:",
+      round(median_rul, 2),
+      "; True RUL:",
+      true_residual_life
+    ),
+    x = "Residual Life (Days)",
+    y = "Probability Density"
+  ) +
+  coord_cartesian(xlim = c(0, 70)) +
+  theme_minimal() +
+  theme(legend.position = "right") # Explicitly set legend position
+```
+
+
+Previous code below
+
+```{r}
+# --- Define Parameters --- See this link for some intuitive understanding of the parameters: https://vru.vibrationresearch.com/lesson/calculating-psd-time-history/
+wc <- 127 # Window size
+n_overlap <- round(0.8 * wc) # Matches overlap in pkurtosis MATLAB function
+n_fft <- 2 * wc
+
+results_df <- df %>%
+  # Create a new column that holds the results of the STFT and kurtosis calculation
+  mutate(
+    sk_results = map(vibration, function(v_signal) {
+      v_signal <- as.vector(v_signal) # Ensure the signal is a vector
+      # 1. Calculate the spectrogram (STFT) for one signal
+      spec <- signal::specgram(
+        x = v_signal,
+        n = round(2 * wc),
+        Fs = fs,
+        overlap = n_overlap
+      )
+
+      # 2. Calculate kurtosis on the magnitude for each frequency bin
+      # The '1' in apply() means "calculate row-wise"
+      # Note: R's moments::kurtosis() is Pearson's kurtosis (not Fisher's), matching 'fisher = False'
+      sk <- apply(abs(spec$S)^1, 1, moments::kurtosis) # MATLAB's pkurtosis calculates the kurtosis on the magnitude spectrum. Had it been on the power spectrum, we would need to use abs(spec$S)^2.
+
+      # Return a dataframe of frequencies and their kurtosis values
+      data.frame(frequency = spec$f, spectral_kurtosis = sk)
+    })
+  ) %>%
+  # Expand the dataframe so each frequency has its own row
+  unnest(sk_results)
+
+# --- Post-processing (Equivalent to your Python code) ---
+
+# The results_df is now a "tidy" dataframe with all frequencies and kurtosis values
+# To get the exact matrix equivalents of 'f' and 'fft':
+
+# 'f' matrix equivalent (each column is a frequency vector)
+unique_frequencies <- unique(results_df$frequency)
+num_signals <- nrow(df) # Number of signals (days)
+f_matrix <- replicate(num_signals, unique_frequencies)
+
+
+# 'fft' matrix equivalent (spectral kurtosis values)
+fft_matrix <- results_df %>%
+  pivot_wider(
+    id_cols = frequency,
+    names_from = day,
+    values_from = spectral_kurtosis
+  ) %>%
+  select(-frequency) %>%
+  as.matrix()
+
+# Normalize the entire matrix to a [0, 1] range
+min_fft <- min(fft_matrix, na.rm = TRUE)
+max_fft <- max(fft_matrix, na.rm = TRUE)
+fftn_matrix <- (fft_matrix - min_fft) / (max_fft - min_fft)
+
+# Create a vector of ones (equivalent to n = np.ones_like(f[0]))
+n <- rep(1, nrow(f_matrix))
+
+# Display the first few rows and columns of the final normalized matrix
+print(fftn_matrix[1:5, 1:5])
+
+plot_data_3d <- results_df
+
+plot_ly(
+  data = plot_data_3d,
+  x = ~day,
+  y = ~frequency,
+  z = ~spectral_kurtosis,
+  type = "scatter3d",
+  mode = "lines",
+  # Color the points by their kurtosis value for better visualization
+  color = ~spectral_kurtosis
+  # ,
+  # # Make markers small and slightly transparent
+  # marker = list(size = 2, opacity = 0.6)
+) %>%
+  layout(
+    title = "Interactive 3D Spectral Kurtosis Plot",
+    scene = list(
+      xaxis = list(title = "Day"),
+      yaxis = list(title = "Frequency (Hz)"),
+      zaxis = list(title = "Spectral Kurtosis")
+    )
+  )
+```
+
+Looks like the plot in the MATLAB tutorial. Except that the MATLAB tutorial uses only the first 10 days of data, while I am using all 50 days of data.
+
+Prepare feature extraction.
+
+```{r}
+# First, add the 'fftn' data as a list-column to the main dataframe
+# This keeps all the data aligned row-by-row
+fftn_list <- purrr::map(1:ncol(fftn_matrix), ~ fftn_matrix[, .x])
+fft_list <- purrr::map(1:ncol(fft_matrix), ~ fft_matrix[, .x])
+df <- df %>% mutate(fftn = fftn_list, fft = fft_list)
+
+# Now, calculate all features
+features_df <- df %>%
+  rowwise() %>%
+  mutate(
+    # --- Time-domain features from the 'vibration' column ---
+    mean = mean(vibration),
+    std = sd(vibration),
+    skew = moments::skewness(vibration),
+    kurtosis = moments::kurtosis(vibration), # This is Pearson's kurtosis, same as fisher=False
+    peak2peak = max(vibration, na.rm = TRUE) - min(vibration, na.rm = TRUE),
+    rms = sqrt(mean(vibration^2, na.rm = TRUE)),
+
+    # Using max(abs()) is more robust for crest/impulse/margin factors
+    crestFactor = max(abs(vibration), na.rm = TRUE) / rms,
+    shapeFactor = rms / mean(abs(vibration), na.rm = TRUE),
+    impulseFactor = max(abs(vibration), na.rm = TRUE) /
+      mean(abs(vibration), na.rm = TRUE),
+    marginFactor = max(abs(vibration), na.rm = TRUE) /
+      (mean(abs(vibration), na.rm = TRUE)^2),
+    energy = sum(vibration^2, na.rm = TRUE),
+
+    # --- Frequency-domain features from the 'fftn' list-column ---
+    SKMean = mean(fftn, na.rm = TRUE),
+    SKStd = sd(fftn, na.rm = TRUE),
+    SKSkewness = moments::skewness(fftn, na.rm = TRUE),
+    SKKurtosis = moments::kurtosis(fftn, na.rm = TRUE)
+  ) %>%
+  ungroup() %>% # It's good practice to ungroup after rowwise operations
+  # Drop the original list-columns, similar to df.drop()
+  select(-vibration, -tach, -fftn)
+
+# View the resulting dataframe with all the new features
+print(features_df)
+```
+
+```{r}
+# Every column in fft_matrix is a list that corresponds to a day of data. I want to add this as a new column to the df tibble.
+
+# Add spectral kurtosis values as lists to df
+df <- df %>%
+  mutate(
+    spectral_kurtosis = map(row_number(), ~ fft_matrix[, .x]),
+    frequency = list(unique_frequencies)
+  )
+```
+
+
+ROUGH
+
+
+```{r}
+# --- Create Sample Data (equivalent to your Python df) ---
+# Assuming 'df' is a dataframe with 50 rows, containing vibration data in a list-column
+num_signals <- 50
+fs <- 1000 # Sampling frequency
+t <- seq(0, 1, length.out = fs) # 1 second of data per signal
+
+df_test <- tibble(
+  signal_id = 1:num_signals,
+  vibration = map(signal_id, ~ sin(2 * pi * 50 * t) + rnorm(fs, sd = 0.5) * .x)
+)
+```
