@@ -3,7 +3,56 @@ title: "Extreme Value Analysis"
 format: html
 ---
 
+Load libraries
 
 ```{r}
+library(tidyverse)
+```
 
+Simulate wall thickness data
+
+```{r}
+set.seed(123)
+n <- 40
+N <- 1000
+wall_thickness <- rnorm(n, mean = 0.073, sd = 0.004)
+max(wall_thickness)
+min(wall_thickness)
+# Plot histogram of wall thickness data
+hist(
+  wall_thickness,
+  main = "Histogram of Wall Thickness",
+  xlab = "Wall Thickness (inches)",
+  col = "lightblue",
+  border = "black"
+)
+
+# Set nominal wall thickness
+nominal_thickness <- 0.095
+
+# Max Wall Loss
+max_wall_loss <- nominal_thickness - wall_thickness
+
+```
+
+We will fit a Gumbel distribution to the maximum wall loss data, as per the original paper by Dr Wang here:
+
+https://drive.google.com/open?id=1LpYpqTee28lgcjwzFr7L7au-04klSqbY&usp=drive_fs
+
+```{r}
+library(evd)
+# Fit Gumbel distribution
+fit <- fgev(max_wall_loss, shape = 0)
+
+loc <- fit$estimate[1]
+scale <- fit$estimate[2]
+
+varCov <- fit$var.cov
+
+```
+
+Using the return level method from the paper, estimate the maximum wall loss for N tubes.
+
+```{r}
+x.N <- scale * (-log(-log(1 - (1 / N)))) + loc
 ```
