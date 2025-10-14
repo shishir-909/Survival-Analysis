@@ -65,6 +65,13 @@ ui <- page_navbar(
           "Inspection Date:",
           value = Sys.Date()
         ),
+        numericInput(
+          "renewal_thickness",
+          "Renewal Thickness:",
+          value = 0.040,
+          min = 0,
+          step = 0.001
+        ),
         actionButton(
           "analyze",
           "Run Analysis",
@@ -484,16 +491,16 @@ server <- function(input, output, session) {
     )
     cat("Standard Error:", round(values$se_x_N, 6), "\n\n")
 
-    # Create confidence intervals table for max wall loss
-    cat("Confidence Intervals for Maximum Wall Loss:\n")
-    cat(sprintf(
-      "%-12s %-12s %-12s %-12s %-12s\n",
-      "",
-      "99%",
-      "95%",
-      "90%",
-      "80%"
-    ))
+    # # Create confidence intervals table for max wall loss
+    # cat("Confidence Intervals for Maximum Wall Loss:\n")
+    # cat(sprintf(
+    #   "%-12s %-12s %-12s %-12s %-12s\n",
+    #   "",
+    #   "99%",
+    #   "95%",
+    #   "90%",
+    #   "80%"
+    # ))
 
     # Calculate lower bounds
     lower_bounds <- sapply(conf_levels, function(alpha) {
@@ -507,23 +514,23 @@ server <- function(input, output, session) {
       values$x_N + t_value * values$se_x_N
     })
 
-    cat(sprintf(
-      "%-12s %-12s %-12s %-12s %-12s\n",
-      "Lower Bound",
-      round(lower_bounds[1], 6),
-      round(lower_bounds[2], 6),
-      round(lower_bounds[3], 6),
-      round(lower_bounds[4], 6)
-    ))
+    # cat(sprintf(
+    #   "%-12s %-12s %-12s %-12s %-12s\n",
+    #   "Lower Bound",
+    #   round(lower_bounds[1], 6),
+    #   round(lower_bounds[2], 6),
+    #   round(lower_bounds[3], 6),
+    #   round(lower_bounds[4], 6)
+    # ))
 
-    cat(sprintf(
-      "%-12s %-12s %-12s %-12s %-12s\n",
-      "Upper Bound",
-      round(upper_bounds[1], 6),
-      round(upper_bounds[2], 6),
-      round(upper_bounds[3], 6),
-      round(upper_bounds[4], 6)
-    ))
+    # cat(sprintf(
+    #   "%-12s %-12s %-12s %-12s %-12s\n",
+    #   "Upper Bound",
+    #   round(upper_bounds[1], 6),
+    #   round(upper_bounds[2], 6),
+    #   round(upper_bounds[3], 6),
+    #   round(upper_bounds[4], 6)
+    # ))
 
     cat("\n")
 
@@ -604,7 +611,14 @@ server <- function(input, output, session) {
   })
 
   output$corrosion_rate <- renderPrint({
-    req(values$x_N, values$se_x_N, input$start_operation, input$inspection_date)
+    req(
+      values$x_N,
+      values$se_x_N,
+      input$start_operation,
+      input$inspection_date,
+      input$renewal_thickness,
+      input$nominal_thickness
+    )
 
     # Calculate years in service
     years_in_service <- as.numeric(
@@ -629,7 +643,18 @@ server <- function(input, output, session) {
     # Calculate corrosion rates
     corrosion_rates <- upper_bounds / years_in_service
 
-    # Create table
+    # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
+    min_thickness_estimates <- sapply(upper_bounds, function(upper) {
+      input$nominal_thickness - upper
+    })
+
+    # Calculate remaining life
+    remaining_life <- sapply(1:length(conf_levels), function(i) {
+      (min_thickness_estimates[i] - input$renewal_thickness) /
+        corrosion_rates[i]
+    })
+
+    # Create corrosion rates table
     cat("Corrosion Rates (inches/year):\n")
     cat(sprintf("%-12s %-12s %-12s %-12s\n", "99%", "95%", "90%", "80%"))
     cat(sprintf(
@@ -640,14 +665,47 @@ server <- function(input, output, session) {
       round(corrosion_rates[4], 6)
     ))
 
-    # cat(sprintf("\nTime in service: %.2f years", years_in_service))
-    cat("\nStart of Operation:", as.character(input$start_operation), "\n")
+    cat("\n")
+
+    # Create remaining life table
+    cat("Remaining Life (years):\n")
+    cat(sprintf("%-12s %-12s %-12s %-12s\n", "99%", "95%", "90%", "80%"))
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s\n",
+      round(remaining_life[1], 2),
+      round(remaining_life[2], 2),
+      round(remaining_life[3], 2),
+      round(remaining_life[4], 2)
+    ))
+    
+    # Calculate expiry dates
+    expiry_dates <- sapply(remaining_life, function(years) {
+      expiry_date <- input$inspection_date + (years * 365.25)
+      format(expiry_date, "%Y-%m-%d")
+    })
+    
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s\n",
+      expiry_dates[1],
+      expiry_dates[2],
+      expiry_dates[3],
+      expiry_dates[4]
+    ))
+
+    cat("\nRenewal Thickness:", input$renewal_thickness, "inches\n")
+    cat("Start of Operation:", as.character(input$start_operation), "\n")
     cat("Inspection Date:", as.character(input$inspection_date), "\n")
     cat(
       "Time in Service:",
       as.numeric(input$inspection_date - input$start_operation),
       "days\n"
     )
+    # cat(
+    #   "\nEstimated corrosion rate based on the upper bound of a 95% confidence level is",
+    #   round(corrosion_rates[2], 6),
+    #   "inches/year.",
+    #   "\n"
+    # )
   })
 
   # Plot outputs
