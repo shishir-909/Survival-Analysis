@@ -475,13 +475,8 @@ server <- function(input, output, session) {
   output$min_thickness_estimate <- renderPrint({
     req(values$x_N, values$se_x_N, input$nominal_thickness)
 
-    # Confidence interval using Student's t-distribution
-    alpha <- 0.05
-    t_value <- qt(1 - alpha / 2, df = values$n - 1)
-    x_N_lower <- values$x_N - t_value * values$se_x_N
-    x_N_upper <- values$x_N + t_value * values$se_x_N
-
-    min_thickness_estimate <- input$nominal_thickness - x_N_upper
+    # Define confidence levels
+    conf_levels <- c(0.99, 0.95, 0.90, 0.80)
 
     cat(
       "Estimated Maximum Wall Loss for",
@@ -490,19 +485,76 @@ server <- function(input, output, session) {
       round(values$x_N, 6),
       "\n"
     )
-    cat("Standard Error:", round(values$se_x_N, 6), "\n")
-    cat(
-      "95% CI for Max Wall Loss: [",
-      round(x_N_lower, 6),
-      ",",
-      round(x_N_upper, 6),
-      "]\n"
-    )
-    cat(
-      "\nEstimated Minimum Wall Thickness:",
-      round(min_thickness_estimate, 6),
-      "\n"
-    )
+    cat("Standard Error:", round(values$se_x_N, 6), "\n\n")
+
+    # Create confidence intervals table for max wall loss
+    cat("Confidence Intervals for Maximum Wall Loss:\n")
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s %-12s\n",
+      "",
+      "99%",
+      "95%",
+      "90%",
+      "80%"
+    ))
+
+    # Calculate lower bounds
+    lower_bounds <- sapply(conf_levels, function(alpha) {
+      t_value <- qt(1 - (1 - alpha) / 2, df = values$n - 1)
+      values$x_N - t_value * values$se_x_N
+    })
+
+    # Calculate upper bounds
+    upper_bounds <- sapply(conf_levels, function(alpha) {
+      t_value <- qt(1 - (1 - alpha) / 2, df = values$n - 1)
+      values$x_N + t_value * values$se_x_N
+    })
+
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s %-12s\n",
+      "Lower Bound",
+      round(lower_bounds[1], 6),
+      round(lower_bounds[2], 6),
+      round(lower_bounds[3], 6),
+      round(lower_bounds[4], 6)
+    ))
+
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s %-12s\n",
+      "Upper Bound",
+      round(upper_bounds[1], 6),
+      round(upper_bounds[2], 6),
+      round(upper_bounds[3], 6),
+      round(upper_bounds[4], 6)
+    ))
+
+    cat("\n")
+
+    # Create minimum wall thickness table (lower bounds only)
+    cat("Minimum Wall Thickness Estimates:\n")
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s %-12s\n",
+      "",
+      "99%",
+      "95%",
+      "90%",
+      "80%"
+    ))
+
+    # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
+    min_thickness_estimates <- sapply(upper_bounds, function(upper) {
+      input$nominal_thickness - upper
+    })
+
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s %-12s\n",
+      "Lower Bound",
+      round(min_thickness_estimates[1], 6),
+      round(min_thickness_estimates[2], 6),
+      round(min_thickness_estimates[3], 6),
+      round(min_thickness_estimates[4], 6)
+    ))
+
     cat("\nStart of Operation:", as.character(input$start_operation), "\n")
     cat("Inspection Date:", as.character(input$inspection_date), "\n")
     cat(

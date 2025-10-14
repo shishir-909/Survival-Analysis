@@ -149,7 +149,7 @@ c(x.N_lower, x.N_upper)
 
 c(nominal_thickness - x.N_upper, nominal_thickness - x.N_lower)
 
-min_wall_Expected <- nominal_thickness - x.N_upper
+(min_wall_Expected <- nominal_thickness - x.N_upper)
 
 print(c(
   "Estimated minimum thickness for N tubes using Expected Information:" = nominal_thickness -
@@ -1002,7 +1002,7 @@ EVERYTHING BELOW IS ROUGH WORK.
 # Set nominal wall thickness
 nominal_thickness <- 0.095
 n <- 40
-N <- 100
+N <- 1000
 num_readings <- 20 # Number of readings per tube
 
 # Simulate wall thickness readings for each tube

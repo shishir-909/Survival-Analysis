@@ -108,20 +108,17 @@ ui <- page_navbar(
 
     br(),
 
-    card(
-      card_header("Goodness of Fit Tests"),
-      layout_columns(
-        col_widths = c(6, 6),
+    layout_columns(
+      col_widths = c(6, 6),
 
-        div(
-          h5("Kolmogorov-Smirnov Test"),
-          verbatimTextOutput("ks_test")
-        ),
+      card(
+        card_header("Goodness of Fit Tests"),
+        verbatimTextOutput("goodness_tests")
+      ),
 
-        div(
-          h5("Anderson-Darling Test"),
-          verbatimTextOutput("ad_test")
-        )
+      card(
+        card_header("Corrosion Rate"),
+        verbatimTextOutput("corrosion_rate")
       )
     )
   ),
@@ -555,32 +552,101 @@ server <- function(input, output, session) {
       round(min_thickness_estimates[4], 6)
     ))
 
+    # cat("\nStart of Operation:", as.character(input$start_operation), "\n")
+    # cat("Inspection Date:", as.character(input$inspection_date), "\n")
+    # cat(
+    #   "Time in Service:",
+    #   as.numeric(input$inspection_date - input$start_operation),
+    #   "days\n"
+    # )
+    cat(
+      "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
+      round(min_thickness_estimates[2], 6),
+      "inches.",
+      "\n"
+    )
+    cat(
+      "\n\nNote: The estimates must only be used after considering the results of the goodness of fit tests below\n",
+      "\nand the plots on the next tab.\n"
+    )
+  })
+
+  output$goodness_tests <- renderPrint({
+    req(values$max_wall_loss, values$loc, values$scale)
+
+    # Perform tests
+    ks_result <- ks.test(
+      values$max_wall_loss,
+      "pgumbel",
+      loc = values$loc,
+      scale = values$scale
+    )
+
+    ad_result <- ad.test(
+      values$max_wall_loss,
+      "pgumbel",
+      loc = values$loc,
+      scale = values$scale
+    )
+
+    # Create table
+    cat(sprintf("%-25s %-12s\n", "Test", "P-value"))
+    cat(sprintf(
+      "%-25s %-12s\n",
+      "Kolmogorov-Smirnov",
+      round(ks_result$p.value, 6)
+    ))
+    cat(sprintf(
+      "%-25s %-12s\n",
+      "Anderson-Darling",
+      round(ad_result$p.value, 6)
+    ))
+  })
+
+  output$corrosion_rate <- renderPrint({
+    req(values$x_N, values$se_x_N, input$start_operation, input$inspection_date)
+
+    # Calculate years in service
+    years_in_service <- as.numeric(
+      input$inspection_date - input$start_operation
+    ) /
+      365.25
+
+    if (years_in_service <= 0) {
+      cat("Invalid service time. Please check your operation dates.")
+      return()
+    }
+
+    # Define confidence levels
+    conf_levels <- c(0.99, 0.95, 0.90, 0.80)
+
+    # Calculate upper bounds for max wall loss
+    upper_bounds <- sapply(conf_levels, function(alpha) {
+      t_value <- qt(1 - (1 - alpha) / 2, df = values$n - 1)
+      values$x_N + t_value * values$se_x_N
+    })
+
+    # Calculate corrosion rates
+    corrosion_rates <- upper_bounds / years_in_service
+
+    # Create table
+    cat("Corrosion Rates (inches/year):\n")
+    cat(sprintf("%-12s %-12s %-12s %-12s\n", "99%", "95%", "90%", "80%"))
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s\n",
+      round(corrosion_rates[1], 6),
+      round(corrosion_rates[2], 6),
+      round(corrosion_rates[3], 6),
+      round(corrosion_rates[4], 6)
+    ))
+
+    # cat(sprintf("\nTime in service: %.2f years", years_in_service))
     cat("\nStart of Operation:", as.character(input$start_operation), "\n")
     cat("Inspection Date:", as.character(input$inspection_date), "\n")
     cat(
       "Time in Service:",
       as.numeric(input$inspection_date - input$start_operation),
       "days\n"
-    )
-  })
-
-  output$ks_test <- renderPrint({
-    req(values$max_wall_loss, values$loc, values$scale)
-    ks.test(
-      values$max_wall_loss,
-      "pgumbel",
-      loc = values$loc,
-      scale = values$scale
-    )
-  })
-
-  output$ad_test <- renderPrint({
-    req(values$max_wall_loss, values$loc, values$scale)
-    ad.test(
-      values$max_wall_loss,
-      "pgumbel",
-      loc = values$loc,
-      scale = values$scale
     )
   })
 
