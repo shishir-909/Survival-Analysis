@@ -487,6 +487,7 @@ server <- function(input, output, session) {
       input$n_tubes,
       "tubes:",
       round(values$x_N, 6),
+      "inches",
       "\n"
     )
     cat("Standard Error:", round(values$se_x_N, 6), "\n\n")
@@ -535,7 +536,7 @@ server <- function(input, output, session) {
     cat("\n")
 
     # Create minimum wall thickness table (lower bounds only)
-    cat("Minimum Wall Thickness Estimates:\n")
+    cat("Minimum Wall Thickness Estimates (inches):\n")
     cat(sprintf(
       "%-12s %-12s %-12s %-12s %-12s\n",
       "",
@@ -569,12 +570,11 @@ server <- function(input, output, session) {
     cat(
       "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
       round(min_thickness_estimates[2], 6),
-      "inches.",
+      "\ninches.",
       "\n"
     )
     cat(
-      "\n\nNote: The estimates must only be used after considering the results of the goodness of fit tests below\n",
-      "\nand the plots on the next tab.\n"
+      "\n\nNote: The estimates must only be used after considering the results of the goodness of fit \ntests and the plots on the next tab.\n"
     )
   })
 
@@ -608,6 +608,10 @@ server <- function(input, output, session) {
       "Anderson-Darling",
       round(ad_result$p.value, 6)
     ))
+    cat("\n")
+    cat(
+      "Higher p-values indicate a better fit. If the p-value is less than 0.05, we reject the null \nhypothesis (at the 5% alpha level) that the data follow a Gumbel distribution and conclude that \nthe fit is not adequate.\n"
+    )
   })
 
   output$corrosion_rate <- renderPrint({
@@ -677,13 +681,17 @@ server <- function(input, output, session) {
       round(remaining_life[3], 2),
       round(remaining_life[4], 2)
     ))
-    
+
     # Calculate expiry dates
     expiry_dates <- sapply(remaining_life, function(years) {
-      expiry_date <- input$inspection_date + (years * 365.25)
-      format(expiry_date, "%Y-%m-%d")
+      if (years > 0) {
+        expiry_date <- input$inspection_date + (years * 365.25)
+        format(expiry_date, "%Y-%m-%d")
+      } else {
+        "N/A"
+      }
     })
-    
+
     cat(sprintf(
       "%-12s %-12s %-12s %-12s\n",
       expiry_dates[1],
@@ -692,6 +700,13 @@ server <- function(input, output, session) {
       expiry_dates[4]
     ))
 
+    # Check if any remaining life is negative and add warning message
+    if (any(remaining_life < 0)) {
+      cat(
+        "\nNegative remaining life indicates that the estimated minimum wall thickness is less than the \nrenewal thickness."
+      )
+    }
+    cat("\n")
     cat("\nRenewal Thickness:", input$renewal_thickness, "inches\n")
     cat("Start of Operation:", as.character(input$start_operation), "\n")
     cat("Inspection Date:", as.character(input$inspection_date), "\n")
