@@ -14,6 +14,21 @@ plan(multisession)
 ui <- page_navbar(
   title = "Extreme Value Analysis",
   theme = bs_theme(version = 5),
+  position = "fixed-top",
+  bg = "light",
+  inverse = TRUE,
+  nav_spacer(),
+  nav_item(
+    tags$a(
+      href = "https://www.calgaryanalyticsltd.com/",
+      target = "_blank",
+      tags$img(
+        src = "Calgary Analytics.jpg",
+        height = "40px",
+        style = "margin-top: 1px; margin-bottom: 1px;"
+      )
+    )
+  ),
 
   # Input Tab
   nav_panel(
@@ -49,6 +64,13 @@ ui <- page_navbar(
           step = 0.001
         ),
         numericInput(
+          "renewal_thickness",
+          "Renewal Thickness:",
+          value = 0.040,
+          min = 0,
+          step = 0.001
+        ),
+        numericInput(
           "n_tubes",
           "Total Number of Tubes (N):",
           value = 1000,
@@ -65,13 +87,13 @@ ui <- page_navbar(
           "Inspection Date:",
           value = Sys.Date()
         ),
-        numericInput(
-          "renewal_thickness",
-          "Renewal Thickness:",
-          value = 0.040,
-          min = 0,
-          step = 0.001
-        ),
+        # numericInput(
+        #   "renewal_thickness",
+        #   "Renewal Thickness:",
+        #   value = 0.040,
+        #   min = 0,
+        #   step = 0.001
+        # ),
         actionButton(
           "analyze",
           "Run Analysis",
@@ -154,6 +176,87 @@ ui <- page_navbar(
       card(
         card_header("Exceedance Probability Plot"),
         plotOutput("exceedance_plot", height = "400px")
+      )
+    )
+  ),
+
+  # Contact Tab
+  nav_panel(
+    "Contact",
+    div(
+      class = "container-fluid",
+      style = "padding: 40px;",
+      div(
+        class = "row justify-content-center",
+        div(
+          class = "col-md-8",
+          card(
+            card_header(
+              div(
+                style = "text-align: center;",
+                h3("Contact Information", style = "margin-bottom: 0;")
+              )
+            ),
+            card_body(
+              div(
+                style = "text-align: center; padding: 30px;",
+                p(
+                  "If you have any questions or feedback, please contact me via email or LinkedIn.",
+                  style = "font-size: 18px; margin-bottom: 30px;"
+                ),
+                hr(),
+                div(
+                  style = "margin: 20px 0;",
+                  h4(
+                    "Shishir Rao, P.Eng.",
+                    style = "color: #2c3e50; margin-bottom: 15px;"
+                  ),
+                  h5(
+                    "Calgary Analytics Ltd.",
+                    style = "color: #34495e; margin-bottom: 25px;"
+                  )
+                ),
+                div(
+                  style = "text-align: left; max-width: 500px; margin: 0 auto;",
+                  p(
+                    strong("Phone: "),
+                    "+1 (780) 908-6701",
+                    style = "font-size: 16px; margin: 10px 0;"
+                  ),
+                  p(
+                    strong("Email: "),
+                    a(
+                      "shishir@calgaryanalyticsltd.com",
+                      href = "mailto:shishir@calgaryanalyticsltd.com",
+                      style = "color: #3498db; text-decoration: none;"
+                    ),
+                    style = "font-size: 16px; margin: 10px 0;"
+                  ),
+                  p(
+                    strong("Website: "),
+                    a(
+                      "www.calgaryanalyticsltd.com",
+                      href = "https://www.calgaryanalyticsltd.com",
+                      target = "_blank",
+                      style = "color: #3498db; text-decoration: none;"
+                    ),
+                    style = "font-size: 16px; margin: 10px 0;"
+                  ),
+                  p(
+                    strong("LinkedIn: "),
+                    a(
+                      "www.linkedin.com/in/shishir-rao",
+                      href = "https://www.linkedin.com/in/shishir-rao",
+                      target = "_blank",
+                      style = "color: #3498db; text-decoration: none;"
+                    ),
+                    style = "font-size: 16px; margin: 10px 0;"
+                  )
+                )
+              )
+            )
+          )
+        )
       )
     )
   )

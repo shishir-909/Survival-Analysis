@@ -14,6 +14,9 @@ plan(multisession)
 ui <- page_navbar(
   title = "Extreme Value Analysis",
   theme = bs_theme(version = 5),
+  position = "fixed-top",
+  bg = "primary",
+  inverse = TRUE,
 
   # Input Tab
   nav_panel(
@@ -49,6 +52,13 @@ ui <- page_navbar(
           step = 0.001
         ),
         numericInput(
+          "renewal_thickness",
+          "Renewal Thickness:",
+          value = 0.040,
+          min = 0,
+          step = 0.001
+        ),
+        numericInput(
           "n_tubes",
           "Total Number of Tubes (N):",
           value = 1000,
@@ -65,6 +75,13 @@ ui <- page_navbar(
           "Inspection Date:",
           value = Sys.Date()
         ),
+        # numericInput(
+        #   "renewal_thickness",
+        #   "Renewal Thickness:",
+        #   value = 0.040,
+        #   min = 0,
+        #   step = 0.001
+        # ),
         actionButton(
           "analyze",
           "Run Analysis",
@@ -108,20 +125,17 @@ ui <- page_navbar(
 
     br(),
 
-    card(
-      card_header("Goodness of Fit Tests"),
-      layout_columns(
-        col_widths = c(6, 6),
+    layout_columns(
+      col_widths = c(6, 6),
 
-        div(
-          h5("Kolmogorov-Smirnov Test"),
-          verbatimTextOutput("ks_test")
-        ),
+      card(
+        card_header("Goodness of Fit Tests"),
+        verbatimTextOutput("goodness_tests")
+      ),
 
-        div(
-          h5("Anderson-Darling Test"),
-          verbatimTextOutput("ad_test")
-        )
+      card(
+        card_header("Corrosion Rate"),
+        verbatimTextOutput("corrosion_rate")
       )
     )
   ),
@@ -150,6 +164,87 @@ ui <- page_navbar(
       card(
         card_header("Exceedance Probability Plot"),
         plotOutput("exceedance_plot", height = "400px")
+      )
+    )
+  ),
+
+  # Contact Tab
+  nav_panel(
+    "Contact",
+    div(
+      class = "container-fluid",
+      style = "padding: 40px;",
+      div(
+        class = "row justify-content-center",
+        div(
+          class = "col-md-8",
+          card(
+            card_header(
+              div(
+                style = "text-align: center;",
+                h3("Contact Information", style = "margin-bottom: 0;")
+              )
+            ),
+            card_body(
+              div(
+                style = "text-align: center; padding: 30px;",
+                p(
+                  "If you have any questions or feedback, please contact me via email or LinkedIn.",
+                  style = "font-size: 18px; margin-bottom: 30px;"
+                ),
+                hr(),
+                div(
+                  style = "margin: 20px 0;",
+                  h4(
+                    "Shishir Rao, P.Eng.",
+                    style = "color: #2c3e50; margin-bottom: 15px;"
+                  ),
+                  h5(
+                    "Calgary Analytics Ltd.",
+                    style = "color: #34495e; margin-bottom: 25px;"
+                  )
+                ),
+                div(
+                  style = "text-align: left; max-width: 500px; margin: 0 auto;",
+                  p(
+                    strong("Phone: "),
+                    "+1 (780) 908-6701",
+                    style = "font-size: 16px; margin: 10px 0;"
+                  ),
+                  p(
+                    strong("Email: "),
+                    a(
+                      "shishir@calgaryanalyticsltd.com",
+                      href = "mailto:shishir@calgaryanalyticsltd.com",
+                      style = "color: #3498db; text-decoration: none;"
+                    ),
+                    style = "font-size: 16px; margin: 10px 0;"
+                  ),
+                  p(
+                    strong("Website: "),
+                    a(
+                      "www.calgaryanalyticsltd.com",
+                      href = "https://www.calgaryanalyticsltd.com",
+                      target = "_blank",
+                      style = "color: #3498db; text-decoration: none;"
+                    ),
+                    style = "font-size: 16px; margin: 10px 0;"
+                  ),
+                  p(
+                    strong("LinkedIn: "),
+                    a(
+                      "www.linkedin.com/in/shishir-rao",
+                      href = "https://www.linkedin.com/in/shishir-rao",
+                      target = "_blank",
+                      style = "color: #3498db; text-decoration: none;"
+                    ),
+                    style = "font-size: 16px; margin: 10px 0;"
+                  )
+                )
+              )
+            )
+          )
+        )
       )
     )
   )
@@ -483,20 +578,21 @@ server <- function(input, output, session) {
       input$n_tubes,
       "tubes:",
       round(values$x_N, 6),
+      "inches",
       "\n"
     )
     cat("Standard Error:", round(values$se_x_N, 6), "\n\n")
 
-    # Create confidence intervals table for max wall loss
-    cat("Confidence Intervals for Maximum Wall Loss:\n")
-    cat(sprintf(
-      "%-12s %-12s %-12s %-12s %-12s\n",
-      "",
-      "99%",
-      "95%",
-      "90%",
-      "80%"
-    ))
+    # # Create confidence intervals table for max wall loss
+    # cat("Confidence Intervals for Maximum Wall Loss:\n")
+    # cat(sprintf(
+    #   "%-12s %-12s %-12s %-12s %-12s\n",
+    #   "",
+    #   "99%",
+    #   "95%",
+    #   "90%",
+    #   "80%"
+    # ))
 
     # Calculate lower bounds
     lower_bounds <- sapply(conf_levels, function(alpha) {
@@ -510,28 +606,28 @@ server <- function(input, output, session) {
       values$x_N + t_value * values$se_x_N
     })
 
-    cat(sprintf(
-      "%-12s %-12s %-12s %-12s %-12s\n",
-      "Lower Bound",
-      round(lower_bounds[1], 6),
-      round(lower_bounds[2], 6),
-      round(lower_bounds[3], 6),
-      round(lower_bounds[4], 6)
-    ))
+    # cat(sprintf(
+    #   "%-12s %-12s %-12s %-12s %-12s\n",
+    #   "Lower Bound",
+    #   round(lower_bounds[1], 6),
+    #   round(lower_bounds[2], 6),
+    #   round(lower_bounds[3], 6),
+    #   round(lower_bounds[4], 6)
+    # ))
 
-    cat(sprintf(
-      "%-12s %-12s %-12s %-12s %-12s\n",
-      "Upper Bound",
-      round(upper_bounds[1], 6),
-      round(upper_bounds[2], 6),
-      round(upper_bounds[3], 6),
-      round(upper_bounds[4], 6)
-    ))
+    # cat(sprintf(
+    #   "%-12s %-12s %-12s %-12s %-12s\n",
+    #   "Upper Bound",
+    #   round(upper_bounds[1], 6),
+    #   round(upper_bounds[2], 6),
+    #   round(upper_bounds[3], 6),
+    #   round(upper_bounds[4], 6)
+    # ))
 
     cat("\n")
 
     # Create minimum wall thickness table (lower bounds only)
-    cat("Minimum Wall Thickness Estimates:\n")
+    cat("Minimum Wall Thickness Estimates (inches):\n")
     cat(sprintf(
       "%-12s %-12s %-12s %-12s %-12s\n",
       "",
@@ -555,33 +651,167 @@ server <- function(input, output, session) {
       round(min_thickness_estimates[4], 6)
     ))
 
-    cat("\nStart of Operation:", as.character(input$start_operation), "\n")
+    # cat("\nStart of Operation:", as.character(input$start_operation), "\n")
+    # cat("Inspection Date:", as.character(input$inspection_date), "\n")
+    # cat(
+    #   "Time in Service:",
+    #   as.numeric(input$inspection_date - input$start_operation),
+    #   "days\n"
+    # )
+    cat(
+      "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
+      round(min_thickness_estimates[2], 6),
+      "\ninches.",
+      "\n"
+    )
+    cat(
+      "\n\nNote: The estimates must only be used after considering the results of the goodness of fit \ntests and the plots on the next tab.\n"
+    )
+  })
+
+  output$goodness_tests <- renderPrint({
+    req(values$max_wall_loss, values$loc, values$scale)
+
+    # Perform tests
+    ks_result <- ks.test(
+      values$max_wall_loss,
+      "pgumbel",
+      loc = values$loc,
+      scale = values$scale
+    )
+
+    ad_result <- ad.test(
+      values$max_wall_loss,
+      "pgumbel",
+      loc = values$loc,
+      scale = values$scale
+    )
+
+    # Create table
+    cat(sprintf("%-25s %-12s\n", "Test", "P-value"))
+    cat(sprintf(
+      "%-25s %-12s\n",
+      "Kolmogorov-Smirnov",
+      round(ks_result$p.value, 6)
+    ))
+    cat(sprintf(
+      "%-25s %-12s\n",
+      "Anderson-Darling",
+      round(ad_result$p.value, 6)
+    ))
+    cat("\n")
+    cat(
+      "Higher p-values indicate a better fit. If the p-value is less than 0.05, we reject the null \nhypothesis (at the 5% alpha level) that the data follow a Gumbel distribution and conclude that \nthe fit is not adequate.\n"
+    )
+  })
+
+  output$corrosion_rate <- renderPrint({
+    req(
+      values$x_N,
+      values$se_x_N,
+      input$start_operation,
+      input$inspection_date,
+      input$renewal_thickness,
+      input$nominal_thickness
+    )
+
+    # Calculate years in service
+    years_in_service <- as.numeric(
+      input$inspection_date - input$start_operation
+    ) /
+      365.25
+
+    if (years_in_service <= 0) {
+      cat("Invalid service time. Please check your operation dates.")
+      return()
+    }
+
+    # Define confidence levels
+    conf_levels <- c(0.99, 0.95, 0.90, 0.80)
+
+    # Calculate upper bounds for max wall loss
+    upper_bounds <- sapply(conf_levels, function(alpha) {
+      t_value <- qt(1 - (1 - alpha) / 2, df = values$n - 1)
+      values$x_N + t_value * values$se_x_N
+    })
+
+    # Calculate corrosion rates
+    corrosion_rates <- upper_bounds / years_in_service
+
+    # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
+    min_thickness_estimates <- sapply(upper_bounds, function(upper) {
+      input$nominal_thickness - upper
+    })
+
+    # Calculate remaining life
+    remaining_life <- sapply(1:length(conf_levels), function(i) {
+      (min_thickness_estimates[i] - input$renewal_thickness) /
+        corrosion_rates[i]
+    })
+
+    # Create corrosion rates table
+    cat("Corrosion Rates (inches/year):\n")
+    cat(sprintf("%-12s %-12s %-12s %-12s\n", "99%", "95%", "90%", "80%"))
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s\n",
+      round(corrosion_rates[1], 6),
+      round(corrosion_rates[2], 6),
+      round(corrosion_rates[3], 6),
+      round(corrosion_rates[4], 6)
+    ))
+
+    cat("\n")
+
+    # Create remaining life table
+    cat("Remaining Life (years):\n")
+    cat(sprintf("%-12s %-12s %-12s %-12s\n", "99%", "95%", "90%", "80%"))
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s\n",
+      round(remaining_life[1], 2),
+      round(remaining_life[2], 2),
+      round(remaining_life[3], 2),
+      round(remaining_life[4], 2)
+    ))
+
+    # Calculate expiry dates
+    expiry_dates <- sapply(remaining_life, function(years) {
+      if (years > 0) {
+        expiry_date <- input$inspection_date + (years * 365.25)
+        format(expiry_date, "%Y-%m-%d")
+      } else {
+        "N/A"
+      }
+    })
+
+    cat(sprintf(
+      "%-12s %-12s %-12s %-12s\n",
+      expiry_dates[1],
+      expiry_dates[2],
+      expiry_dates[3],
+      expiry_dates[4]
+    ))
+
+    # Check if any remaining life is negative and add warning message
+    if (any(remaining_life < 0)) {
+      cat(
+        "\nNegative remaining life indicates that the estimated minimum wall thickness is less than the \nrenewal thickness."
+      )
+    }
+    cat("\n")
+    cat("\nRenewal Thickness:", input$renewal_thickness, "inches\n")
+    cat("Start of Operation:", as.character(input$start_operation), "\n")
     cat("Inspection Date:", as.character(input$inspection_date), "\n")
     cat(
       "Time in Service:",
       as.numeric(input$inspection_date - input$start_operation),
       "days\n"
     )
-  })
-
-  output$ks_test <- renderPrint({
-    req(values$max_wall_loss, values$loc, values$scale)
-    ks.test(
-      values$max_wall_loss,
-      "pgumbel",
-      loc = values$loc,
-      scale = values$scale
-    )
-  })
-
-  output$ad_test <- renderPrint({
-    req(values$max_wall_loss, values$loc, values$scale)
-    ad.test(
-      values$max_wall_loss,
-      "pgumbel",
-      loc = values$loc,
-      scale = values$scale
-    )
+    # cat(
+    #   "\nEstimated corrosion rate based on the upper bound of a 95% confidence level is",
+    #   round(corrosion_rates[2], 6),
+    #   "inches/year.",
+    #   "\n"
+    # )
   })
 
   # Plot outputs
