@@ -1014,7 +1014,7 @@ wall_thickness_matrix <- matrix(
 min_wall_thickness <- apply(wall_thickness_matrix, 1, min)
 
 write.table(
-  min_wall_thickness,
+  round(min_wall_thickness, 4),
   "g:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 11/min_wall_thickness.txt",
   row.names = FALSE,
   col.names = FALSE

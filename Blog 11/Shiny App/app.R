@@ -17,6 +17,18 @@ ui <- page_navbar(
   position = "fixed-top",
   bg = "light",
   inverse = TRUE,
+  header = tags$style(HTML(
+    "
+    .container-fluid {
+      padding-top: 20px !important;
+    }
+    .bslib-page-navbar .tab-content {
+      padding-top: 20px;
+    }
+    body {
+      padding-top: 70px !important;
+    }"
+  )),
   nav_spacer(),
   nav_item(
     tags$a(
@@ -146,7 +158,7 @@ ui <- page_navbar(
       ),
 
       card(
-        card_header("Corrosion Rate"),
+        card_header("Corrosion Rate and Remaining Life Estimates"),
         verbatimTextOutput("corrosion_rate")
       )
     )
@@ -392,7 +404,7 @@ server <- function(input, output, session) {
       ) +
       labs(
         title = "Histogram of Minimum Wall Thickness",
-        x = "Minimum Wall Thickness (inches)",
+        x = "Minimum Wall Thickness",
         y = "Frequency"
       ) +
       theme_minimal()
@@ -590,7 +602,7 @@ server <- function(input, output, session) {
       input$n_tubes,
       "tubes:",
       round(values$x_N, 6),
-      "inches",
+      "units",
       "\n"
     )
     cat("Standard Error:", round(values$se_x_N, 6), "\n\n")
@@ -639,7 +651,7 @@ server <- function(input, output, session) {
     cat("\n")
 
     # Create minimum wall thickness table (lower bounds only)
-    cat("Minimum Wall Thickness Estimates (inches):\n")
+    cat("Minimum Wall Thickness Estimates:\n")
     cat(sprintf(
       "%-12s %-12s %-12s %-12s %-12s\n",
       "",
@@ -673,7 +685,7 @@ server <- function(input, output, session) {
     cat(
       "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
       round(min_thickness_estimates[2], 6),
-      "\ninches.",
+      "\nunits.",
       "\n"
     )
     cat(
@@ -713,7 +725,7 @@ server <- function(input, output, session) {
     ))
     cat("\n")
     cat(
-      "Higher p-values indicate a better fit. If the p-value is less than 0.05, we reject the null \nhypothesis (at the 5% alpha level) that the data follow a Gumbel distribution and conclude that \nthe fit is not adequate.\n"
+      "Higher p-values indicate a better fit. If the p-value is less than 0.05, we reject the null \nhypothesis (at the 5% alpha level) that the data follows a Gumbel distribution and conclude that \nthe fit is not adequate.\n"
     )
   })
 
@@ -762,7 +774,7 @@ server <- function(input, output, session) {
     })
 
     # Create corrosion rates table
-    cat("Corrosion Rates (inches/year):\n")
+    cat("Corrosion Rates (units/year):\n")
     cat(sprintf("%-12s %-12s %-12s %-12s\n", "99%", "95%", "90%", "80%"))
     cat(sprintf(
       "%-12s %-12s %-12s %-12s\n",
@@ -810,7 +822,7 @@ server <- function(input, output, session) {
       )
     }
     cat("\n")
-    cat("\nRenewal Thickness:", input$renewal_thickness, "inches\n")
+    cat("\nRenewal Thickness:", input$renewal_thickness, "units\n")
     cat("Start of Operation:", as.character(input$start_operation), "\n")
     cat("Inspection Date:", as.character(input$inspection_date), "\n")
     cat(
@@ -844,7 +856,7 @@ server <- function(input, output, session) {
       ) +
       labs(
         title = "Probability Plot",
-        x = "Empirical CDF (Beta Median)",
+        x = "Empirical CDF",
         y = "Theoretical CDF (Gumbel)"
       ) +
       theme_minimal() +
@@ -917,8 +929,8 @@ server <- function(input, output, session) {
       ) +
       labs(
         title = "Quantile Plot",
-        x = "Theoretical Quantile (Beta Median)",
-        y = "Max Wall Loss (Empirical)"
+        x = "Model Quantile",
+        y = "Empirical Quantile"
       ) +
       theme_minimal() +
       theme(plot.title = element_text(hjust = 0.5, size = 14))
