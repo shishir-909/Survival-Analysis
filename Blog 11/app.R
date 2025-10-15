@@ -51,65 +51,76 @@ ui <- page_navbar(
       # Left side - Data Input (full height)
       card(
         card_header("Data Input"),
-        # File upload option
-        fileInput(
-          "wall_thickness_file",
-          "Upload Wall Thickness Data (.txt file):",
-          accept = ".txt"
-        ),
-        # OR text input option
-        div(
-          style = "margin-top: 10px; margin-bottom: 10px; text-align: center;",
-          strong("OR")
-        ),
-        textAreaInput(
-          "wall_thickness_data",
-          "Minimum Wall Thickness Values (one per line):",
-          height = "100px",
-          placeholder = "Enter minimum wall thickness values, one per line..."
-        ),
-        numericInput(
-          "nominal_thickness",
-          "Nominal Wall Thickness:",
-          value = 0.095,
-          min = 0,
-          step = 0.001
-        ),
-        numericInput(
-          "renewal_thickness",
-          "Renewal Thickness:",
-          value = 0.040,
-          min = 0,
-          step = 0.001
-        ),
-        numericInput(
-          "n_tubes",
-          "Total Number of Tubes (N):",
-          value = 1000,
-          min = 1,
-          step = 1
-        ),
-        dateInput(
-          "start_operation",
-          "Start of Operation:",
-          value = Sys.Date() - 365
-        ),
-        dateInput(
-          "inspection_date",
-          "Inspection Date:",
-          value = Sys.Date()
-        ),
-        # numericInput(
-        #   "renewal_thickness",
-        #   "Renewal Thickness:",
-        #   value = 0.040,
-        #   min = 0,
-        #   step = 0.001
-        # ),
-        actionButton(
-          "analyze",
-          "Run Analysis",
-          class = "btn-primary"
+        style = "height: 100vh;",
+        card_body(
+          style = "overflow-y: auto; height: 100%;",
+          # File upload option
+          div(
+            style = "margin-bottom: 15px;",
+            tags$label(
+              class = "form-label",
+              "Upload Wall Thickness Data (.txt file):",
+              tags$span(
+                class = "ms-2",
+                title = "Text file should only include one measurement per line",
+                style = "cursor: help; color: #6c757d;",
+                icon("circle-question")
+              )
+            ),
+            fileInput(
+              "wall_thickness_file",
+              label = NULL,
+              accept = ".txt"
+            )
+          ),
+          # OR text input option
+          div(
+            style = "margin-top: 10px; margin-bottom: 10px; text-align: center;",
+            strong("OR")
+          ),
+          textAreaInput(
+            "wall_thickness_data",
+            "Minimum Wall Thickness Values (one per line):",
+            height = "150px",
+            placeholder = "Enter minimum wall thickness values, one per line..."
+          ),
+          numericInput(
+            "nominal_thickness",
+            "Nominal Wall Thickness:",
+            value = 0.095,
+            min = 0,
+            step = 0.001
+          ),
+          numericInput(
+            "renewal_thickness",
+            "Renewal Thickness:",
+            value = 0.040,
+            min = 0,
+            step = 0.001
+          ),
+          numericInput(
+            "n_tubes",
+            "Total Number of Tubes (N):",
+            value = 1000,
+            min = 1,
+            step = 1
+          ),
+          dateInput(
+            "start_operation",
+            "Start of Operation:",
+            value = Sys.Date() - 365
+          ),
+          dateInput(
+            "inspection_date",
+            "Inspection Date:",
+            value = Sys.Date()
+          ),
+          br(),
+          actionButton(
+            "analyze",
+            "Run Analysis",
+            class = "btn-primary"
+          )
         )
       ),
 
