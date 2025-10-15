@@ -15,8 +15,32 @@ ui <- page_navbar(
   title = "Extreme Value Analysis",
   theme = bs_theme(version = 5),
   position = "fixed-top",
-  bg = "primary",
+  bg = "light",
   inverse = TRUE,
+  header = tags$style(HTML(
+    "
+    .container-fluid {
+      padding-top: 20px !important;
+    }
+    .bslib-page-navbar .tab-content {
+      padding-top: 20px;
+    }
+    body {
+      padding-top: 70px !important;
+    }"
+  )),
+  nav_spacer(),
+  nav_item(
+    tags$a(
+      href = "https://www.calgaryanalyticsltd.com/",
+      target = "_blank",
+      tags$img(
+        src = "Calgary Analytics.jpg",
+        height = "40px",
+        style = "margin-top: 1px; margin-bottom: 1px;"
+      )
+    )
+  ),
 
   # Input Tab
   nav_panel(
@@ -134,7 +158,7 @@ ui <- page_navbar(
       ),
 
       card(
-        card_header("Corrosion Rate"),
+        card_header("Corrosion Rate and Remaining Life Estimates"),
         verbatimTextOutput("corrosion_rate")
       )
     )
@@ -379,11 +403,15 @@ server <- function(input, output, session) {
         size = 6
       ) +
       labs(
-        title = "Histogram of Minimum Wall Thickness",
-        x = "Minimum Wall Thickness (inches)",
+        # title = "Histogram of Minimum Wall Thickness",
+        x = "Minimum Wall Thickness",
         y = "Frequency"
       ) +
-      theme_minimal()
+      theme_minimal() +
+      theme(
+        axis.text = element_text(size = 14), # Increase size for both axes
+        axis.title = element_text(size = 16) # Increase size for both axes
+      )
   })
 
   # Main analysis
@@ -420,6 +448,14 @@ server <- function(input, output, session) {
     if (any(wall_thickness > input$nominal_thickness)) {
       showNotification(
         "Measured minimum wall thickness cannot be greater than nominal thickness. Please check your input data.",
+        type = "error"
+      )
+      return()
+    }
+
+    if (any(wall_thickness < 0)) {
+      showNotification(
+        "Measured minimum wall thickness readings cannot be less than zero. Please check your input data.",
         type = "error"
       )
       return()
@@ -578,10 +614,10 @@ server <- function(input, output, session) {
       input$n_tubes,
       "tubes:",
       round(values$x_N, 6),
-      "inches",
+      "units",
       "\n"
     )
-    cat("Standard Error:", round(values$se_x_N, 6), "\n\n")
+    cat("Standard Error:", round(values$se_x_N, 6), "\n")
 
     # # Create confidence intervals table for max wall loss
     # cat("Confidence Intervals for Maximum Wall Loss:\n")
@@ -626,8 +662,22 @@ server <- function(input, output, session) {
 
     cat("\n")
 
+    # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
+    min_thickness_estimates <- sapply(upper_bounds, function(upper) {
+      input$nominal_thickness - upper
+    })
+
+    cat(
+      "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
+      round(min_thickness_estimates[2], 6),
+      "\nunits.",
+      "\n"
+    )
+
+    cat("\n")
+
     # Create minimum wall thickness table (lower bounds only)
-    cat("Minimum Wall Thickness Estimates (inches):\n")
+    cat("Minimum Wall Thickness Estimates:\n")
     cat(sprintf(
       "%-12s %-12s %-12s %-12s %-12s\n",
       "",
@@ -637,10 +687,10 @@ server <- function(input, output, session) {
       "80%"
     ))
 
-    # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
-    min_thickness_estimates <- sapply(upper_bounds, function(upper) {
-      input$nominal_thickness - upper
-    })
+    # # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
+    # min_thickness_estimates <- sapply(upper_bounds, function(upper) {
+    #   input$nominal_thickness - upper
+    # })
 
     cat(sprintf(
       "%-12s %-12s %-12s %-12s %-12s\n",
@@ -658,12 +708,12 @@ server <- function(input, output, session) {
     #   as.numeric(input$inspection_date - input$start_operation),
     #   "days\n"
     # )
-    cat(
-      "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
-      round(min_thickness_estimates[2], 6),
-      "\ninches.",
-      "\n"
-    )
+    # cat(
+    #   "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
+    #   round(min_thickness_estimates[2], 6),
+    #   "\nunits.",
+    #   "\n"
+    # )
     cat(
       "\n\nNote: The estimates must only be used after considering the results of the goodness of fit \ntests and the plots on the next tab.\n"
     )
@@ -701,7 +751,7 @@ server <- function(input, output, session) {
     ))
     cat("\n")
     cat(
-      "Higher p-values indicate a better fit. If the p-value is less than 0.05, we reject the null \nhypothesis (at the 5% alpha level) that the data follow a Gumbel distribution and conclude that \nthe fit is not adequate.\n"
+      "Higher p-values indicate a better fit. If the p-value is less than 0.05, we reject the null \nhypothesis (at the 5% alpha level) that the data follows a Gumbel distribution and conclude that \nthe fit is not adequate.\n"
     )
   })
 
@@ -750,7 +800,7 @@ server <- function(input, output, session) {
     })
 
     # Create corrosion rates table
-    cat("Corrosion Rates (inches/year):\n")
+    cat("Corrosion Rates (units/year):\n")
     cat(sprintf("%-12s %-12s %-12s %-12s\n", "99%", "95%", "90%", "80%"))
     cat(sprintf(
       "%-12s %-12s %-12s %-12s\n",
@@ -798,7 +848,7 @@ server <- function(input, output, session) {
       )
     }
     cat("\n")
-    cat("\nRenewal Thickness:", input$renewal_thickness, "inches\n")
+    cat("\nRenewal Thickness:", input$renewal_thickness, "units\n")
     cat("Start of Operation:", as.character(input$start_operation), "\n")
     cat("Inspection Date:", as.character(input$inspection_date), "\n")
     cat(
@@ -832,7 +882,7 @@ server <- function(input, output, session) {
       ) +
       labs(
         title = "Probability Plot",
-        x = "Empirical CDF (Beta Median)",
+        x = "Empirical CDF",
         y = "Theoretical CDF (Gumbel)"
       ) +
       theme_minimal() +
@@ -905,8 +955,8 @@ server <- function(input, output, session) {
       ) +
       labs(
         title = "Quantile Plot",
-        x = "Theoretical Quantile (Beta Median)",
-        y = "Max Wall Loss (Empirical)"
+        x = "Model Quantile",
+        y = "Empirical Quantile"
       ) +
       theme_minimal() +
       theme(plot.title = element_text(hjust = 0.5, size = 14))
