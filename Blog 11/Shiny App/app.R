@@ -403,11 +403,15 @@ server <- function(input, output, session) {
         size = 6
       ) +
       labs(
-        title = "Histogram of Minimum Wall Thickness",
+        # title = "Histogram of Minimum Wall Thickness",
         x = "Minimum Wall Thickness",
         y = "Frequency"
       ) +
-      theme_minimal()
+      theme_minimal() +
+      theme(
+        axis.text = element_text(size = 14), # Increase size for both axes
+        axis.title = element_text(size = 16) # Increase size for both axes
+      )
   })
 
   # Main analysis
@@ -444,6 +448,14 @@ server <- function(input, output, session) {
     if (any(wall_thickness > input$nominal_thickness)) {
       showNotification(
         "Measured minimum wall thickness cannot be greater than nominal thickness. Please check your input data.",
+        type = "error"
+      )
+      return()
+    }
+
+    if (any(wall_thickness < 0)) {
+      showNotification(
+        "Measured minimum wall thickness readings cannot be less than zero. Please check your input data.",
         type = "error"
       )
       return()
@@ -605,7 +617,7 @@ server <- function(input, output, session) {
       "units",
       "\n"
     )
-    cat("Standard Error:", round(values$se_x_N, 6), "\n\n")
+    cat("Standard Error:", round(values$se_x_N, 6), "\n")
 
     # # Create confidence intervals table for max wall loss
     # cat("Confidence Intervals for Maximum Wall Loss:\n")
@@ -650,6 +662,20 @@ server <- function(input, output, session) {
 
     cat("\n")
 
+    # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
+    min_thickness_estimates <- sapply(upper_bounds, function(upper) {
+      input$nominal_thickness - upper
+    })
+
+    cat(
+      "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
+      round(min_thickness_estimates[2], 6),
+      "\nunits.",
+      "\n"
+    )
+
+    cat("\n")
+
     # Create minimum wall thickness table (lower bounds only)
     cat("Minimum Wall Thickness Estimates:\n")
     cat(sprintf(
@@ -661,10 +687,10 @@ server <- function(input, output, session) {
       "80%"
     ))
 
-    # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
-    min_thickness_estimates <- sapply(upper_bounds, function(upper) {
-      input$nominal_thickness - upper
-    })
+    # # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
+    # min_thickness_estimates <- sapply(upper_bounds, function(upper) {
+    #   input$nominal_thickness - upper
+    # })
 
     cat(sprintf(
       "%-12s %-12s %-12s %-12s %-12s\n",
@@ -682,12 +708,12 @@ server <- function(input, output, session) {
     #   as.numeric(input$inspection_date - input$start_operation),
     #   "days\n"
     # )
-    cat(
-      "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
-      round(min_thickness_estimates[2], 6),
-      "\nunits.",
-      "\n"
-    )
+    # cat(
+    #   "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
+    #   round(min_thickness_estimates[2], 6),
+    #   "\nunits.",
+    #   "\n"
+    # )
     cat(
       "\n\nNote: The estimates must only be used after considering the results of the goodness of fit \ntests and the plots on the next tab.\n"
     )
