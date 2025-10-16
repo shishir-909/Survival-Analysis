@@ -663,11 +663,11 @@ server <- function(input, output, session) {
       "Estimated Maximum Wall Loss for",
       input$n_tubes,
       "tubes:",
-      round(values$x_N, 6),
+      round(values$x_N, 3),
       "units",
       "\n"
     )
-    cat("Standard Error:", round(values$se_x_N, 6), "\n")
+    cat("Standard Error:", round(values$se_x_N, 3), "\n")
 
     # # Create confidence intervals table for max wall loss
     # cat("Confidence Intervals for Maximum Wall Loss:\n")
@@ -719,7 +719,7 @@ server <- function(input, output, session) {
 
     cat(
       "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
-      round(min_thickness_estimates[2], 6),
+      round(min_thickness_estimates[2], 3),
       "\nunits.",
       "\n"
     )
@@ -745,10 +745,10 @@ server <- function(input, output, session) {
     cat(sprintf(
       "%-12s %-12s %-12s %-12s %-12s\n",
       "Lower Bound",
-      round(min_thickness_estimates[1], 6),
-      round(min_thickness_estimates[2], 6),
-      round(min_thickness_estimates[3], 6),
-      round(min_thickness_estimates[4], 6)
+      round(min_thickness_estimates[1], 3),
+      round(min_thickness_estimates[2], 3),
+      round(min_thickness_estimates[3], 3),
+      round(min_thickness_estimates[4], 3)
     ))
 
     # cat("\nStart of Operation:", as.character(input$start_operation), "\n")
@@ -792,12 +792,12 @@ server <- function(input, output, session) {
     cat(sprintf(
       "%-25s %-12s\n",
       "Kolmogorov-Smirnov",
-      round(ks_result$p.value, 6)
+      round(ks_result$p.value, 3)
     ))
     cat(sprintf(
       "%-25s %-12s\n",
       "Anderson-Darling",
-      round(ad_result$p.value, 6)
+      round(ad_result$p.value, 3)
     ))
     cat("\n")
     cat(
@@ -854,10 +854,10 @@ server <- function(input, output, session) {
     cat(sprintf("%-12s %-12s %-12s %-12s\n", "99%", "95%", "90%", "80%"))
     cat(sprintf(
       "%-12s %-12s %-12s %-12s\n",
-      round(corrosion_rates[1], 6),
-      round(corrosion_rates[2], 6),
-      round(corrosion_rates[3], 6),
-      round(corrosion_rates[4], 6)
+      round(corrosion_rates[1], 3),
+      round(corrosion_rates[2], 3),
+      round(corrosion_rates[3], 3),
+      round(corrosion_rates[4], 3)
     ))
 
     cat("\n")
