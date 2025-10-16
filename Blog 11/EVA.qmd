@@ -1,0 +1,969 @@
+---
+title: "Extreme Value Analysis"
+format: html
+---
+
+Load libraries
+
+```{r}
+library(tidyverse)
+library(evd)
+library(goftest)
+library(shiny)
+```
+
+Simulate wall thickness data
+
+```{r, eval=FALSE}
+
+# # set.seed(123)
+# n <- 40
+# N <- 1000
+
+# wall_thickness <- rnorm(n, mean = 0.073, sd = 0.004)
+
+# max(wall_thickness)
+# min(wall_thickness)
+# # Plot histogram of wall thickness data
+# hist(
+#   wall_thickness,
+#   main = "Histogram of Wall Thickness",
+#   xlab = "Wall Thickness (inches)",
+#   col = "lightblue",
+#   border = "black"
+# )
+
+# # Set nominal wall thickness
+# nominal_thickness <- 0.095
+
+# # Max Wall Loss
+# max_wall_loss <- nominal_thickness - wall_thickness
+
+```
+
+Simulate wall thickness readings in each of "n" tubes from a normal distribution. Then, extract the minimum thickness from each tube. Every tube will have 20 readings from a normal distribution.
+
+```{r}
+# set.seed(47)
+
+# Set nominal wall thickness
+nominal_thickness <- 0.095
+n <- 40
+N <- 100
+num_readings <- 20 # Number of readings per tube
+
+# Simulate wall thickness readings for each tube
+wall_thickness_matrix <- matrix(
+  rnorm(n * num_readings, mean = 0.073, sd = 0.004),
+  nrow = n,
+  ncol = num_readings
+)
+min_wall_thickness <- apply(wall_thickness_matrix, 1, min)
+
+min(min_wall_thickness)
+
+# Max Wall Loss
+max_wall_loss <- nominal_thickness - min_wall_thickness
+
+# # Plot histogram of wall thickness data. Add a line for the nominal thickness
+# hist(
+#   min_wall_thickness,
+#   main = "Histogram of Wall Thickness",
+#   xlab = "Wall Thickness (inches)",
+#   col = "lightblue",
+#   border = "black"
+# )
+
+# abline(v = nominal_thickness, col = "red", lwd = 2)
+
+# Creat a histogram using ggplot2
+
+ggplot(data.frame(min_wall_thickness), aes(x = min_wall_thickness)) +
+  geom_histogram(
+    binwidth = 0.002,
+    fill = "lightblue",
+    color = "black",
+    alpha = 0.7
+  ) +
+  geom_vline(
+    xintercept = nominal_thickness,
+    color = "red",
+    linetype = "dashed",
+    size = 1
+  ) +
+  annotate(
+    "text",
+    x = nominal_thickness + 0.002,
+    y = 5,
+    label = "Nominal Thickness",
+    color = "red",
+    angle = 90,
+    vjust = -0.5,
+    size = 8
+  ) +
+  labs(
+    title = "Histogram of Minimum Wall Thickness",
+    x = "Minimum Wall Thickness (inches)",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+
+```
+
+We will fit a Gumbel distribution to the maximum wall loss data, as per the original paper by Dr Wang here:
+
+https://drive.google.com/open?id=1LpYpqTee28lgcjwzFr7L7au-04klSqbY&usp=drive_fs
+
+```{r}
+library(evd)
+
+# Fit Gumbel distribution
+fit <- fgev(max_wall_loss, shape = 0) # Shape parameter = 0 for Gumbel distribution
+fit
+loc <- mu <- as.numeric(fit$estimate[1])
+scale <- sigma <- as.numeric(fit$estimate[2])
+
+# Using the return level method from the Dr Wang paper, estimate the maximum wall loss for N tubes.
+
+(x.N <- scale * (-log(-log(1 - (1 / N)))) + loc)
+
+nominal_thickness - x.N
+
+# Dr Wang's paper uses the expected information matrix to calculate standard errors. SMRD2 uses the observed information matrix. "evd" package also uses the observed information matrix. I will first use equation 15 from Dr Wang's paper, which uses the expected information matrix to calculate the standard error of the return level estimate.
+
+se_x.N <- scale *
+  sqrt(
+    (1.109 +
+      0.514 * (-log(-log(1 - (1 / N)))) +
+      (0.608 * ((-log(-log(1 - (1 / N))))**2))) /
+      n
+  )
+
+# Confidence interval based on Student's t-distribution
+
+alpha <- 0.05
+t_value <- qt(1 - alpha / 2, df = n - 1)
+x.N_lower <- x.N - t_value * se_x.N
+x.N_upper <- x.N + t_value * se_x.N
+c(x.N_lower, x.N_upper)
+
+c(nominal_thickness - x.N_upper, nominal_thickness - x.N_lower)
+
+(min_wall_Expected <- nominal_thickness - x.N_upper)
+
+print(c(
+  "Estimated minimum thickness for N tubes using Expected Information:" = nominal_thickness -
+    x.N_upper
+))
+
+# Alternatively, we can use the observed information matrix and Wald Confidence interval to calculate the standard error of the return level estimate.
+
+varCov <- fit$var.cov
+
+dgdmu <- 1
+dgdsigma <- -log(-log(1 - (1 / N)))
+
+grad <- matrix(c(dgdmu, dgdsigma), nrow = 1)
+varReturnLevel_obsInf <- grad %*% varCov %*% t(grad)
+(seReturnLevel_obsInf <- sqrt(varReturnLevel_obsInf))
+
+z_value <- qnorm(1 - alpha / 2)
+
+x.N_obsInf_lower <- x.N - z_value * seReturnLevel_obsInf
+x.N_obsInf_upper <- x.N + z_value * seReturnLevel_obsInf
+c(x.N_obsInf_lower, x.N_obsInf_upper)
+
+c(nominal_thickness - x.N_obsInf_upper, nominal_thickness - x.N_obsInf_upper)
+
+print(c(
+  "Estimated minimum thickness for N tubes using Observed Information:" = nominal_thickness -
+    x.N_obsInf_upper
+))
+
+# Summary of results
+
+results <- data.frame(
+  Method = c("Expected Information", "Observed Information"),
+  Estimated_Max_Wall_Loss = c(x.N, x.N),
+  SE = c(se_x.N, seReturnLevel_obsInf),
+  Lower_CI = c(x.N_lower, x.N_obsInf_lower),
+  Upper_CI = c(x.N_upper, x.N_obsInf_upper),
+  Estimated_Min_Thickness = c(
+    nominal_thickness - x.N_upper,
+    nominal_thickness - x.N_obsInf_upper
+  )
+)
+
+```
+
+In the above chunk, I got got the minimum wall thickness using the expected information matrix and the observed information matrix. 
+
+Next, I want to use profile likelihood to get a confidence interval for the return level estimate.
+
+
+```{r, include=FALSE}
+
+# Next, I want to use profile likelihood to get a confidence interval for the return level estimate. In order to do this, I need to reparameterise the distribution in terms of the return level. Sometimes, the optimization does not converge, so I will use try to handle errors in optimization. If it does not converge, I will fall back to the previous method using the expected information matrix.
+
+# Use try to handle errors in optimization
+
+# fit_quantile_maxit <- try(
+#   fgev(
+#     max_wall_loss,
+#     prob = (1 / N),
+#     shape = 0,
+#     std.err = TRUE,
+#     control = list(maxit = 10000)
+#   ),
+#   silent = TRUE
+# ) #Note that prob is the exceedance probability. x.N is the 1-(1/N) quantile. If I want to parameterise the distribution in terms of the 1-(1/N) quantile, I need to use prob = (1/N). Also, increase the maximum iterations to ensure convergence.
+
+# class(fit_quantile_maxit)
+
+# if (class(fit_quantile_maxit)[1] != "try-error") {
+#   loc <- fit_quantile_maxit$loc
+#   scale <- fit_quantile_maxit$estimate[2]
+#   prof_fit_quantile_maxit <- profile(fit_quantile_maxit)
+#   returnLevel_CI_profLik <- confint(prof_fit, level = 0.95) # This gives the CI for the fit parameters based on profile likelihood.
+#   x.N_lower <- returnLevel_CI_profLik[1, 1]
+#   x.N_upper <- returnLevel_CI_profLik[1, 2]
+
+#   min_wall_thickness_lower <- nominal_thickness - x.N_upper
+#   min_wall_thickness_upper <- nominal_thickness - x.N_lower
+
+#   # Get varCov matrix of the loc and scale parameters
+#   fit <- fgev(max_wall_loss, shape = 0) # Shape parameter = 0 for Gumbel distribution
+#   varCov <- fit$var.cov
+# } else {
+#   # Fit Gumbel distribution
+#   fit <- fgev(max_wall_loss, shape = 0) # Shape parameter = 0 for Gumbel distribution
+#   fit
+#   loc <- mu <- as.numeric(fit$estimate[1])
+#   scale <- sigma <- as.numeric(fit$estimate[2])
+#   varCov <- fit$var.cov # Get varCov matrix of the loc and scale parameters
+
+#   # Using the return level method from the Dr Wang paper, estimate the maximum wall loss for N tubes.
+
+#   (x.N <- scale * (-log(-log(1 - (1 / N)))) + loc)
+
+#   nominal_thickness - x.N
+
+#   # Dr Wang's paper uses the expected information matrix to calculate standard errors. SMRD2 uses the observed information matrix. "evd" package also uses the observed information matrix. I will first use equation 15 from Dr Wang's paper, which uses the expected information matrix to calculate the standard error of the return level estimate.
+
+#   se_x.N <- scale *
+#     sqrt(
+#       (1.109 +
+#         0.514 * (-log(-log(1 - (1 / N)))) +
+#         (0.608 * ((-log(-log(1 - (1 / N))))**2))) /
+#         n
+#     )
+
+#   # Confidence interval based on Student's t-distribution
+
+#   alpha <- 0.05
+#   t_value <- qt(1 - alpha / 2, df = n - 1)
+#   x.N_lower <- x.N - t_value * se_x.N
+#   x.N_upper <- x.N + t_value * se_x.N
+
+#   min_wall_thickness_lower <- nominal_thickness - x.N_upper
+#   min_wall_thickness_upper <- nominal_thickness - x.N_lower
+# }
+
+```
+
+I got the estimated minimum wall thickness for N tubes in the above code chunk. But the issue is that the profile likelihood method takes a long time and sometimes it does not converge. So, I will use the expected information matrix method to get the estimated minimum wall thickness for N tubes.
+
+
+Next, I will do goodness of fit.
+
+Plots
+
+```{r}
+# Probability Plot
+
+plot_data <- data.frame(
+  order_stat <- 1:n,
+  max_wall_loss = sort(max_wall_loss),
+  emp_cdf = (1:n) / (n + 1), # This empirical CDF is the Weibull plotting position
+  theo_cdf = pgumbel(sort(max_wall_loss), loc = loc, scale = scale),
+  theo_quantile = qgumbel((1:n) / (n + 1), loc = loc, scale = scale)
+)
+
+plot_data <- plot_data %>%
+  mutate(
+    emp_cdf_betaMedian = qbeta(0.5, order_stat, n - order_stat + 1)
+  ) %>% # Beta median plotting position, just like Cenosco uses.
+  mutate(
+    theo_quantile_betaMedian = qgumbel(
+      emp_cdf_betaMedian,
+      loc = loc,
+      scale = scale
+    ) # Based on beta median plotting position
+  )
+# %>%
+# mutate(y = (max_wall_loss - loc) / scale) %>% # Standard Gumbel variate
+# mutate(
+#   dgdmu = (-1 / scale) * (exp(-y)) * (exp(-exp(-y))),
+#   dgdsigma = (-y / scale) * (exp(-y)) * (exp(-exp(-y)))
+# ) %>%
+# mutate(
+#   var_cdf = (dgdmu**2 * varCov[1, 1]) +
+#     (dgdsigma**2 * varCov[2, 2]) +
+#     (2 * dgdmu * dgdsigma * varCov[1, 2])
+# ) %>%
+# mutate(se_cdf = sqrt(var_cdf)) %>%
+# mutate(
+#   cdf_lower_wald = pmax(0, theo_cdf - qnorm(0.975) * se_cdf),
+#   cdf_upper_wald = pmin(1, theo_cdf + qnorm(0.975) * se_cdf)
+# )
+
+# Plot probability plot with emp_cdf_betaMedian on the X axis and theo_cdf on the Y axis, include a reference line. Include a step function for the cdf_lower_wald and cdf_upper_wald
+
+# ggplot(plot_data, aes(x = emp_cdf_betaMedian, y = theo_cdf)) +
+#   geom_point(color = "red") +
+#   geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+#   geom_step(aes(y = cdf_lower_wald), color = "black", linetype = "dotted") +
+#   geom_step(aes(y = cdf_upper_wald), color = "black", linetype = "dotted") +
+#   labs(
+#     title = "Probability Plot with Confidence Intervals",
+#     x = "Empirical CDF (Beta Median)",
+#     y = "Theoretical CDF (Gumbel)"
+#   ) +
+#   theme_minimal()
+
+# Wald based CI look problematic. They are too narrow. I will try using the bootstrap method to get the confidence intervals.
+
+```
+
+Simulation based bootstrap confidence intervals for the theoretical CDF values on the probability plot
+
+```{r}
+n_boot <- 1000 # Number of bootstrap samples
+all_cdfs <- list()
+all_vals <- list()
+
+for (i in 1:n_boot) {
+  print(paste("Bootstrap iteration:", i))
+
+  # Simulate data
+  sim_data <- rgev(n, loc = loc, scale = scale, shape = 0)
+
+  # order statistics of the simulated data
+  sim_data_sorted <- sort(sim_data)
+
+  all_cdfs[[i]] <- evd::pgev(
+    sim_data_sorted,
+    loc = loc,
+    scale = scale,
+    shape = 0
+  )
+
+  all_vals[[i]] <- sim_data_sorted
+}
+
+# Combine the CDFs into a matrix for easier calculation
+cdf_matrix <- do.call(cbind, all_cdfs) %>%
+  as.data.frame()
+
+# Combine the sorted values into a matrix for easier calculation
+vals_matrix <- do.call(cbind, all_vals) %>%
+  as.data.frame()
+
+# Calculate the 95% confidence interval
+cdf_lower_bootstrap <- apply(cdf_matrix, 1, quantile, probs = 0.025)
+cdf_upper_bootstrap <- apply(cdf_matrix, 1, quantile, probs = 0.975)
+vals_lower_bootstrap <- apply(vals_matrix, 1, quantile, probs = 0.025)
+vals_upper_bootstrap <- apply(vals_matrix, 1, quantile, probs = 0.975)
+
+plot_data <- plot_data %>%
+  mutate(cdf_lower_bootstrap = cdf_lower_bootstrap) %>%
+  mutate(cdf_upper_bootstrap = cdf_upper_bootstrap) %>%
+  mutate(vals_lower_bootstrap = vals_lower_bootstrap) %>%
+  mutate(vals_upper_bootstrap = vals_upper_bootstrap)
+
+# ggplot
+
+ggplot(plot_data, aes(x = emp_cdf_betaMedian, y = theo_cdf)) +
+  geom_point(color = "red") +
+  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+  geom_point(
+    aes(
+      y = cdf_lower_bootstrap,
+    ),
+    color = "black",
+    shape = 95,
+    size = 5
+  ) +
+  geom_point(
+    aes(
+      y = cdf_upper_bootstrap,
+    ),
+    color = "black",
+    shape = 95,
+    size = 5
+  ) +
+  labs(
+    title = "Probability Plot with Bootstrap Confidence Intervals",
+    x = "Empirical CDF (Beta Median)",
+    y = "Theoretical CDF (Gumbel)"
+  ) +
+  theme_minimal()
+
+# plot(fit, a = 1 / 3) # a=1/3 is for the beta median plotting position. This line plots the same as above, but is directly from the evd package.
+
+```
+
+Next, I want to plot the the max wall loss on the X axis and the CDF on the Y axis. The model CDF will be a smooth line and the points will be the CDF of the empirical data.
+
+```{r}
+# Plot ggplot where the max wall loss is on the X axis and the CDF of gumbel i.e. pgumbel fuunction is on the Y axis.
+
+plot_data2 <- data.frame(
+  max_wall_loss = seq(
+    0,
+    max(max_wall_loss) * 1.5,
+    length.out = 100
+  ),
+  theo_cdf = pgumbel(
+    seq(
+      0,
+      max(max_wall_loss) * 1.5,
+      length.out = 100
+    ),
+    loc = loc,
+    scale = scale
+  )
+)
+
+# # Empirical CDF of the max wall loss data
+
+# empirical_cdf <- ecdf(max_wall_loss)
+
+# plot_data <- plot_data %>%
+#   mutate(emp_cdf = empirical_cdf(max_wall_loss))
+
+ggplot(plot_data, aes(x = max_wall_loss)) +
+  geom_line(
+    data = plot_data2,
+    aes(x = max_wall_loss, y = theo_cdf),
+    color = "blue"
+  ) +
+  geom_point(aes(y = emp_cdf_betaMedian), color = "red") +
+  labs(
+    title = "Empirical vs Theoretical CDF",
+    x = "Max Wall Loss",
+    y = "CDF"
+  ) +
+  scale_x_continuous(
+    limits = c(min(max_wall_loss) * 0.75, max(max_wall_loss) * 1.25)
+  ) +
+  theme_minimal()
+
+
+```
+
+Looks like the plot on Cenosco website. Happy with it.
+
+Next, I will plot the quantile plot.
+
+```{r}
+# Quantile Plot with max_wall_loss on the X axis and the theo_quantile_betaMedian on the Y axis.
+
+# ggplot(plot_data, aes(x = max_wall_loss, y = theo_quantile_betaMedian)) +
+#   geom_point(color = "red") +
+#   geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+#   labs(
+#     title = "Quantile Plot",
+#     x = "Max Wall Loss (Empirical)",
+#     y = "Theoretical Quantile (Beta Median)"
+#   ) +
+#   theme_minimal()
+
+# # Same plot as above, but with axes swapped
+
+# ggplot(plot_data, aes(x = theo_quantile_betaMedian, y = max_wall_loss)) +
+#   geom_point(color = "red") +
+#   geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+#   labs(
+#     title = "Quantile Plot",
+#     x = "Theoretical Quantile (Beta Median)",
+#     y = "Max Wall Loss (Empirical)"
+#   ) +
+#   theme_minimal()
+
+# Add simulation based bootstrap confidence intervals for the theoretical quantiles on the quantile plot.
+
+# ggplot
+
+ggplot(plot_data, aes(x = theo_quantile_betaMedian, y = max_wall_loss)) +
+  geom_point(color = "red") +
+  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+  geom_point(
+    aes(
+      y = vals_lower_bootstrap
+    ),
+    color = "black",
+    shape = 95,
+    size = 5
+  ) +
+  geom_point(
+    aes(
+      y = vals_upper_bootstrap
+    ),
+    color = "black",
+    shape = 95,
+    size = 5
+  ) +
+  labs(
+    title = "Quantile Plot",
+    x = "Theoretical Quantile (Beta Median)",
+    y = "Max Wall Loss (Empirical)"
+  ) +
+  theme_minimal()
+
+
+```
+
+
+Looks like the quantile plot from the Cenosco website. Happy with it.
+
+Next, I will plot the Exceedance probability plot.
+
+```{r}
+# Exceedance Probability Plot with max_wall_loss on the X axis and 1 - emp_cdf_betaMedian on the Y axis. I will also add a line for the theoretical probability of exceedance.
+
+ggplot(plot_data, aes(x = max_wall_loss)) +
+  geom_line(
+    data = plot_data2,
+    aes(x = max_wall_loss, y = log(1 - theo_cdf)),
+    color = "blue"
+  ) +
+  geom_point(aes(y = log(1 - emp_cdf_betaMedian)), color = "red") +
+  labs(
+    title = "Empirical vs Theoretical Exceedance Probability",
+    x = "Max Wall Loss",
+    y = "Log(Exceedance Probability)"
+  ) +
+  scale_x_continuous(
+    limits = c(min(max_wall_loss) * 0.75, max(max_wall_loss) * 1.25)
+  ) +
+  scale_y_continuous(
+    limits = c(floor(min(log(1 - plot_data$emp_cdf_betaMedian))), 0)
+  ) +
+  theme_minimal()
+
+```
+
+Looks like the exceedance probability plot from the Cenosco website. Happy with it.
+
+Next, I want to do the Kolmogorov-Smirnov test and Anderson-Darling test for goodness of fit.
+
+```{r}
+ks.test(max_wall_loss, "pgumbel", loc = loc, scale = scale)
+ad.test(max_wall_loss, "pgumbel", loc = loc, scale = scale)
+```
+
+Both tests indicate that the Gumbel distribution is a good fit for the maximum wall loss data.
+
+END OF ESTIMATION< PLOTTING AND STATISTICAL GOF TESTS. 
+
+Next, I want to build a Shiny app that takes in wall thickness data, nominal wall thickness, and N tubes as inputs and outputs the estimated minimum wall thickness for N tubes along with the probability plot, quantile plot, and exceedance probability plot. It will also output the results of the KS and AD tests.
+
+SHINY APP (Don't use the one below. I have the app in a file called app.R. Use that one instead)
+
+EVERYTHING BELOW IS ROUGH WORK.
+
+```{r}
+# Set nominal wall thickness
+nominal_thickness <- 0.095
+n <- 20
+N <- 1000
+num_readings <- 20 # Number of readings per tube
+
+# Simulate wall thickness readings for each tube
+wall_thickness_matrix <- matrix(
+  rnorm(n * num_readings, mean = 0.076, sd = 0.008),
+  nrow = n,
+  ncol = num_readings
+)
+min_wall_thickness <- apply(wall_thickness_matrix, 1, min)
+
+write.table(
+  round(min_wall_thickness, 3),
+  "g:/My Drive/rao@ualberta.ca 2022-12-08 10 58/shishir@tamu.edu/My Drive/Interesting papers/Survival Models/GitHub/Survival/Survival-Analysis/Blog 11/min_wall_thickness.txt",
+  row.names = FALSE,
+  col.names = FALSE
+)
+
+
+```
+
+
+```{r}
+
+n_boot <- 1000 # Number of bootstrap samples
+all_cdfs <- list()
+
+for (i in 1:n_boot) {
+  print(paste("Bootstrap iteration:", i))
+
+  # Initialize boot_fit to NULL before starting the attempt
+  boot_fit <- NULL
+
+  # This loop will repeat until a successful fit is assigned to boot_fit
+  repeat {
+    # Simulate data inside the repeat loop
+    sim_data <- rgev(n, loc = loc, scale = scale, shape = 0)
+
+    boot_fit <- tryCatch(
+      {
+        # TRY: Attempt to fit the model. If successful, the result is returned.
+        fgev(sim_data, shape = 0, std.err = FALSE)
+      },
+      error = function(e) {
+        # CATCH: This code runs ONLY if an error occurs in the 'try' block.
+        # We print a message to the console and return NULL.
+        message(paste(
+          "Fit failed on iteration",
+          i,
+          "- Discarding data and retrying. Error:",
+          e$message
+        ))
+        return(NULL)
+      }
+    )
+
+    # If boot_fit is NOT NULL, it means the tryCatch was successful.
+    # We can then 'break' out of the repeat loop.
+    if (!is.null(boot_fit)) {
+      break
+    }
+  }
+
+  # The rest of the code only runs after a successful fit is obtained
+  loc_boot <- boot_fit$estimate[1]
+  scale_boot <- boot_fit$estimate[2]
+
+  #   x_vals <- seq(min(max_wall_loss), max(max_wall_loss), length.out = 100)
+  all_cdfs[[i]] <- evd::pgev(
+    max_wall_loss,
+    loc = loc_boot,
+    scale = scale_boot,
+    shape = 0
+  )
+}
+
+# Combine the CDFs into a matrix for easier calculation
+cdf_matrix <- do.call(cbind, all_cdfs) %>%
+  as.data.frame() %>%
+  mutate(max_wall_loss = max_wall_loss) %>%
+  arrange(max_wall_loss) %>%
+  select(-max_wall_loss) %>%
+  as.matrix()
+
+# Calculate the 95% confidence interval
+cdf_lower_bootstrap <- apply(cdf_matrix, 1, quantile, probs = 0.025)
+cdf_upper_bootstrap <- apply(cdf_matrix, 1, quantile, probs = 0.975)
+
+plot_data <- plot_data %>%
+  mutate(cdf_lower_bootstrap = cdf_lower_bootstrap) %>%
+  mutate(cdf_upper_bootstrap = cdf_upper_bootstrap)
+
+# Plot the ggplot again, but without any step functions. Include the bootstrap CI instead of the Wald CI. For every theoretical CDF value, I want to plot the lower and upper bootstrap CI values as a small "dash" at its corresponding empirical CDF value.
+
+ggplot(plot_data, aes(x = emp_cdf_betaMedian, y = theo_cdf)) +
+  geom_point(color = "red") +
+  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+  geom_errorbar(
+    aes(
+      y = theo_cdf,
+      ymin = cdf_lower_bootstrap,
+      ymax = cdf_upper_bootstrap
+    ),
+    width = 0.01,
+    color = "black"
+  ) +
+  labs(
+    title = "Probability Plot with Bootstrap Confidence Intervals",
+    x = "Empirical CDF (Beta Median)",
+    y = "Theoretical CDF (Gumbel)"
+  ) +
+  theme_minimal()
+
+# Instead of the whole error bar, I just want the whiskers at the top and bottom. I will use geom_segment to draw the whiskers.
+
+ggplot(plot_data, aes(x = emp_cdf_betaMedian, y = theo_cdf)) +
+  geom_point(color = "red") +
+  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+  geom_segment(
+    aes(
+      x = emp_cdf_betaMedian - 0.01,
+      xend = emp_cdf_betaMedian + 0.01,
+      y = cdf_lower_bootstrap,
+      yend = cdf_lower_bootstrap
+    ),
+    color = "black"
+  ) +
+  geom_segment(
+    aes(
+      x = emp_cdf_betaMedian - 0.01,
+      xend = emp_cdf_betaMedian + 0.01,
+      y = cdf_upper_bootstrap,
+      yend = cdf_upper_bootstrap
+    ),
+    color = "black"
+  ) +
+  labs(
+    title = "Probability Plot with Bootstrap Confidence Intervals",
+    x = "Empirical CDF (Beta Median)",
+    y = "Theoretical CDF (Gumbel)"
+  ) +
+  theme_minimal()
+
+plot(fit, a = 1 / 3) # a=1/3 is for the beta median plotting position
+
+plot.uvevd(fit) # This is the same as above
+
+
+ggplot(plot_data, aes(x = emp_cdf_betaMedian, y = theo_cdf)) +
+  geom_point(color = "red") +
+  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+  geom_step(
+    aes(
+      y = cdf_lower_bootstrap[findInterval(
+        emp_cdf_betaMedian,
+        seq(0, 1, length.out = 100)
+      )]
+    ),
+    color = "black",
+    linetype = "dotted"
+  ) +
+  geom_step(
+    aes(
+      y = cdf_upper_bootstrap[findInterval(
+        emp_cdf_betaMedian,
+        seq(0, 1, length.out = 100)
+      )]
+    ),
+    color = "black",
+    linetype = "dotted"
+  ) +
+  labs(
+    title = "Probability Plot with Bootstrap Confidence Intervals",
+    x = "Empirical CDF (Beta Median)",
+    y = "Theoretical CDF (Gumbel)"
+  ) +
+  theme_minimal()
+
+# Repeat the above ggplot, but without using a step function for the bootstrap CI
+
+ggplot(plot_data, aes(x = emp_cdf_betaMedian, y = theo_cdf)) +
+  geom_point(color = "red") +
+  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+  geom_line(
+    aes(
+      y = cdf_lower_bootstrap[findInterval(
+        emp_cdf_betaMedian,
+        seq(0, 1, length.out = 100)
+      )]
+    ),
+    color = "black",
+    linetype = "dotted"
+  ) +
+  geom_line(
+    aes(
+      y = cdf_upper_bootstrap[findInterval(
+        emp_cdf_betaMedian,
+        seq(0, 1, length.out = 100)
+      )]
+    ),
+    color = "black",
+    linetype = "dotted"
+  ) +
+  labs(
+    title = "Probability Plot with Bootstrap Confidence Intervals",
+    x = "Empirical CDF (Beta Median)",
+    y = "Theoretical CDF (Gumbel)"
+  ) +
+  theme_minimal()
+
+
+```
+
+Using the return level method from the paper, estimate the maximum wall loss for N tubes.
+
+```{r}
+x.N <- scale * (-log(-log(1 - (1 / N)))) + loc
+```
+
+Calculating the standard error of the return level estimate using the delta method in SMRD2. Note that this uses the observed information matrix.
+
+```{r}
+dgdmu <- 1
+dgdsigma <- -log(-log(1 - (1 / N)))
+
+grad <- matrix(c(dgdmu, dgdsigma), nrow = 1)
+varReturnLevel <- grad %*% varCov %*% t(grad)
+(seReturnLevel <- sqrt(varReturnLevel))
+```
+
+Calculating the standard error as per the paper. Note that this uses the expected information matrix. The expected information matrix is considered more robust and theoretically grounded (as per Gemini).
+
+```{r}
+y <- (x.N - loc) / scale
+y <- -log(-log(1 - (1 / N)))
+(se.xN <- scale * sqrt((1.109 + 0.514 * y + (0.608 * (y**2))) / n))
+```
+
+Calculating a 95% confidence interval for the return level estimate
+
+ROUGH
+
+```{r}
+confint(fit)
+
+prof_fit <- profile(fit)
+confint(prof_fit)
+
+fgev.quantile(fit, probs = c(0.95, 0.99, 0.999))
+fgev.quantile(fit, probs = c(0.95, 0.99, 0.999), se.fit = TRUE)
+
+fit_quantile <- fgev.quantile(max_wall_loss, prob = (1 / N), shape = 0)
+fit_quantile$estimate[1]
+confint(fit_quantile)
+
+fit <- fgev(max_wall_loss, shape = 0)
+fit
+
+confint(fit)
+
+prof_fit <- profile(fit)
+confint(prof_fit)
+
+N <- 1000
+(x.N <- scale * (-log(-log(1 - (1 / N)))) + loc)
+
+fit_quantile <- fgev(max_wall_loss, prob = (1 / N), shape = 0) #Note that prob is the exceedance probability. x.N is the 1-(1/N) quantile. If I want to parameterise the distribution in terms of the 1-(1/N) quantile, I need to use prob = (1/N).
+fit_quantile
+
+# Increase the maximum iterations to ensure convergence
+
+fit_quantile_maxit <- fgev(
+  max_wall_loss,
+  prob = (1 / N),
+  shape = 0,
+  control = list(maxit = 10000)
+)
+fit_quantile_maxit
+
+# Get profile likelihood for quantile
+
+confint(fit_quantile_maxit)
+
+prof_fit_quantile_maxit <- profile(fit_quantile_maxit)
+confint(prof_fit)
+
+
+fit_quantile$estimate[1]
+fit_quantile$estimate[2] * fit_quantile$estimate[1] + fit_quantile$loc
+
+
+qgumbel(1 - (1 / N), loc = fit_quantile$loc, scale = fit_quantile$estimate[2])
+
+prof_fit_quantile <- profile(fit, which = "quantile", prob = 1 - (1 / N))
+
+mu <- prof_fit_quantile$loc
+scale <- prof_fit_quantile$scale
+quant <- prof_fit_quantile$estimate[1]
+
+qgumbel(1 - (1 / N), loc = mu, scale = scale)
+
+```
+
+See if extRemes package has better optimization
+
+
+```{r}
+# Install and load the package
+install.packages("extRemes")
+library(extRemes)
+
+# Fit the Gumbel model and get profile likelihood confidence intervals
+# The type="Gumbel" argument fixes the shape parameter to 0
+fit_fevd <- fevd(max_wall_loss, type = "Gumbel")
+fit_fevd
+ci(fit_fevd, type = "return.level", return.period = N, method = "proflik")
+ci(fit_fevd, type = "parameter", which.par = c(1), method = "proflik")
+```
+
+
+```{r}
+library(evd)
+
+# 1. Fit your model to the original data
+# Using portpirie as an example
+fit_gev <- fgev(portpirie, shape = 0)
+n <- length(portpirie)
+
+# 2. Get the empirical probabilities (X-axis values)
+# These are fixed for the plot and calculated from the original data.
+sorted_data <- sort(portpirie)
+ppos <- (1:n) / (n + 1) # Weibull plotting positions
+
+# 3. Generate bootstrapped confidence intervals for the theoretical probabilities (Y-axis)
+n_boot <- 1000
+boot_results <- replicate(n_boot, {
+  # Simulate a new dataset from the fitted model
+  sim_data <- rgev(
+    n,
+    loc = fit_gev$estimate["loc"],
+    scale = fit_gev$estimate["scale"],
+    shape = 0
+  )
+
+  # Fit the model to the simulated data
+  boot_fit <- fgev(sim_data, shape = 0)
+
+  # Calculate theoretical probabilities for the original data, but with the
+  # parameters from the *bootstrapped* fit
+  pgev(
+    sorted_data,
+    loc = boot_fit$estimate["loc"],
+    scale = boot_fit$estimate["scale"],
+    shape = 0
+  )
+})
+
+# 4. Calculate confidence bands from the bootstrapped theoretical probabilities
+lower_ci <- apply(boot_results, 1, quantile, probs = 0.025)
+upper_ci <- apply(boot_results, 1, quantile, probs = 0.975)
+
+# 5. Create the plot
+# First, plot the confidence bands as a polygon
+plot(
+  ppos,
+  ppos,
+  type = "n",
+  xlab = "Empirical Probabilities",
+  ylab = "Theoretical Probabilities",
+  main = "P-P Plot with Confidence Interval",
+  xlim = c(0, 1),
+  ylim = c(0, 1)
+)
+
+polygon(
+  c(ppos, rev(ppos)),
+  c(lower_ci, rev(upper_ci)),
+  col = "grey90",
+  border = NA
+)
+
+# Add the 1-to-1 line for reference
+abline(0, 1, lty = 1, col = "red")
+
+# Add the empirical points from the original data
+points(ppos, theoretical_p, pch = 16, col = "blue")
+
+plot(fit_gev)
+
+```
