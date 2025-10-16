@@ -223,15 +223,26 @@ ui <- page_navbar(
             card_body(
               div(
                 style = "text-align: center; padding: 30px;",
+                # p(
+                #   "This calculator can be used to estimate the remaining life of a heat exchanger based on wall thickness readings from a sample of tubes. Please refer to the ",
+                #   a(
+                #     "presentation here",
+                #     href = "https://docs.google.com/presentation/d/15vX2N5hw0Fgjkwj-oyEmL1C-bGDLqQuUuQnJBxkSiYY/edit?usp=sharing",
+                #     target = "_blank",
+                #     style = "color: #3498db; text-decoration: underline;"
+                #   ),
+                #   " for details on how to use this app.",
+                #   style = "font-size: 18px; margin-bottom: 20px; line-height: 1.6;"
+                # ),
                 p(
                   "This calculator can be used to estimate the remaining life of a heat exchanger based on wall thickness readings from a sample of tubes. Please refer to the ",
                   a(
-                    "presentation here",
-                    href = "https://docs.google.com/presentation/d/15vX2N5hw0Fgjkwj-oyEmL1C-bGDLqQuUuQnJBxkSiYY/edit?usp=sharing",
+                    "document here",
+                    href = "Estimating Remaining Life of Heat Exchangers using Extreme Value Analysis.pdf",
                     target = "_blank",
                     style = "color: #3498db; text-decoration: underline;"
                   ),
-                  " for details on how to use this app.",
+                  " for details on how to use this calculator. Feel free to contact me if you have any questions.",
                   style = "font-size: 18px; margin-bottom: 30px; line-height: 1.6;"
                 )
               )
