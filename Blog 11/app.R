@@ -729,12 +729,20 @@ server <- function(input, output, session) {
       input$nominal_thickness - upper
     })
 
-    cat(
-      "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
-      round(min_thickness_estimates[2], 3),
-      "\nunits.",
-      "\n"
-    )
+    # Check if 95% confidence estimate is less than renewal thickness
+    if (min_thickness_estimates[2] < input$renewal_thickness) {
+      cat(
+        "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is less than renewal thickness.",
+        "\n"
+      )
+    } else {
+      cat(
+        "\nEstimated minimum wall thickness based on the lower bound of a 95% confidence level is",
+        round(min_thickness_estimates[2], 3),
+        "\nunits.",
+        "\n"
+      )
+    }
 
     cat("\n")
 
@@ -749,18 +757,22 @@ server <- function(input, output, session) {
       "80%"
     ))
 
-    # # Calculate minimum thickness estimates (nominal - upper bound of max wall loss)
-    # min_thickness_estimates <- sapply(upper_bounds, function(upper) {
-    #   input$nominal_thickness - upper
-    # })
+    # Format thickness estimates, showing "< Renewal Thickness" for negative values
+    formatted_estimates <- sapply(min_thickness_estimates, function(estimate) {
+      if (estimate < input$renewal_thickness) {
+        paste0("<", input$renewal_thickness)
+      } else {
+        round(estimate, 3)
+      }
+    })
 
     cat(sprintf(
       "%-12s %-12s %-12s %-12s %-12s\n",
       "Lower Bound",
-      round(min_thickness_estimates[1], 3),
-      round(min_thickness_estimates[2], 3),
-      round(min_thickness_estimates[3], 3),
-      round(min_thickness_estimates[4], 3)
+      formatted_estimates[1],
+      formatted_estimates[2],
+      formatted_estimates[3],
+      formatted_estimates[4]
     ))
 
     # cat("\nStart of Operation:", as.character(input$start_operation), "\n")

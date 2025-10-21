@@ -59,10 +59,10 @@ ui <- page_navbar(
             style = "margin-bottom: 15px;",
             tags$label(
               class = "form-label",
-              "Upload Wall Thickness Data (.txt file):",
+              "Upload Wall Thickness Data in inches (.txt file):",
               tags$span(
                 class = "ms-2",
-                title = "Text file should only include one measurement per line",
+                title = "Text file should only include one measurement per line. Minimum 20 measurements required for analysis.",
                 style = "cursor: help; color: #6c757d;",
                 icon("circle-question")
               )
@@ -80,20 +80,20 @@ ui <- page_navbar(
           ),
           textAreaInput(
             "wall_thickness_data",
-            "Minimum Wall Thickness Values (one per line):",
+            "Minimum Wall Thickness Values in inches (One per line. Minimum 20 measurements):",
             height = "150px",
             placeholder = "Enter minimum wall thickness values, one per line..."
           ),
           numericInput(
             "nominal_thickness",
-            "Nominal Wall Thickness:",
+            "Nominal Wall Thickness (inches):",
             value = 0.095,
             min = 0,
             step = 0.001
           ),
           numericInput(
             "renewal_thickness",
-            "Renewal Thickness:",
+            "Renewal Thickness (inches):",
             value = 0.040,
             min = 0,
             step = 0.001
@@ -134,7 +134,9 @@ ui <- page_navbar(
         br(),
 
         card(
-          card_header("Wall Thickness Histogram"),
+          card_header(
+            "Wall Thickness Histogram (Minimum 20 measurements required for analysis)"
+          ),
           plotOutput("thickness_histogram", height = "400px")
         )
       )
@@ -491,9 +493,9 @@ server <- function(input, output, session) {
       return()
     }
 
-    if (length(wall_thickness) < 3) {
+    if (length(wall_thickness) < 20) {
       showNotification(
-        "Please provide at least 3 valid wall thickness values",
+        "Please provide at least 20 valid wall thickness values (in inches) for analysis.",
         type = "error"
       )
       return()
