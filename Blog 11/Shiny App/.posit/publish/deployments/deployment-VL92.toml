@@ -6,15 +6,16 @@ client_version = '1.22.0'
 created_at = ''
 dismissed_at = ''
 type = 'r-shiny'
-configuration_name = 'Extreme Value Analysis App-B8VC'
-id = '0199e50f-dbfd-cafb-1651-4b0027f0d8a6'
-dashboard_url = 'https://connect.posit.cloud/shishir/content/0199e50f-dbfd-cafb-1651-4b0027f0d8a6'
-direct_url = 'https://0199e50f-dbfd-cafb-1651-4b0027f0d8a6.share.connect.posit.cloud'
-logs_url = 'https://connect.posit.cloud/shishir/content/0199e50f-dbfd-cafb-1651-4b0027f0d8a6/history'
-deployed_at = '2025-10-16T12:42:25-06:00'
+configuration_name = 'Extreme Value Analysis App-DMUB'
+id = '0199ee58-6846-955b-34a0-47603342d452'
+dashboard_url = 'https://connect.posit.cloud/shishir/content/0199ee58-6846-955b-34a0-47603342d452'
+direct_url = 'https://0199ee58-6846-955b-34a0-47603342d452.share.connect.posit.cloud'
+logs_url = 'https://connect.posit.cloud/shishir/content/0199ee58-6846-955b-34a0-47603342d452/history'
+deployed_at = '2025-10-16T12:46:45-06:00'
+bundle_id = '0199ee58-6848-be51-b726-83d1147956d1'
 files = [
-  '.posit/publish/Extreme Value Analysis App-B8VC.toml',
-  '.posit/publish/deployments/deployment-1MLE.toml',
+  '.posit/publish/Extreme Value Analysis App-DMUB.toml',
+  '.posit/publish/deployments/deployment-VL92.toml',
   'app.R',
   'renv.lock',
   'www/Calgary Analytics.jpg',
@@ -25,11 +26,6 @@ files = [
 [connect_cloud]
 account_name = 'shishir'
 
-[deployment_error]
-code = 'unknown'
-message = 'Error in update content response: unexpected response from the server (404: {"error":"Could not find Content.","error_type":"resource_not_found","error_args":null})'
-operation = ''
-
 [configuration]
 product_type = 'connect_cloud'
 '$schema' = 'https://cdn.posit.co/publisher/schemas/posit-publishing-schema-v3.json'
@@ -38,11 +34,9 @@ entrypoint = 'app.R'
 validate = true
 files = [
   '/app.R',
-  '/.posit/publish/Extreme Value Analysis App-B8VC.toml',
-  '/.posit/publish/deployments/deployment-1MLE.toml',
-  '/www',
-  '/www/Calgary Analytics.jpg',
-  '/www/LI-Logo.png'
+  '/.posit/publish/Extreme Value Analysis App-DMUB.toml',
+  '/.posit/publish/deployments/deployment-VL92.toml',
+  '/www'
 ]
 title = 'Extreme Value Analysis App'
 
