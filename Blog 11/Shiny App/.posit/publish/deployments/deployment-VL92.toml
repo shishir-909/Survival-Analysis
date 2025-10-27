@@ -11,8 +11,8 @@ id = '0199ee58-6846-955b-34a0-47603342d452'
 dashboard_url = 'https://connect.posit.cloud/shishir/content/0199ee58-6846-955b-34a0-47603342d452'
 direct_url = 'https://0199ee58-6846-955b-34a0-47603342d452.share.connect.posit.cloud'
 logs_url = 'https://connect.posit.cloud/shishir/content/0199ee58-6846-955b-34a0-47603342d452/history'
-deployed_at = '2025-10-21T07:48:08-06:00'
-bundle_id = '019a0706-f4ac-66ae-bc8b-120c06d51a1b'
+deployed_at = '2025-10-21T11:10:46-06:00'
+bundle_id = '019a07c0-79a6-6c78-f720-28e8623c5c5b'
 files = [
   '.posit/publish/Extreme Value Analysis App-DMUB.toml',
   '.posit/publish/deployments/deployment-VL92.toml',
