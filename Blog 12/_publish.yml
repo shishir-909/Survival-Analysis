@@ -1,0 +1,4 @@
+- source: customQuarto.qmd
+  quarto-pub:
+    - id: a2a52ec6-28b8-4ef8-9b89-e24c7fa96cb1
+      url: https://shishir.quarto.pub/single-imputation-vs-multivariate-normal-imputation

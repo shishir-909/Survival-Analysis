@@ -1,0 +1,572 @@
+---
+title: "Single Imputation vs Multivariate Normal Imputation"
+subtitle: "A Demonstration using a Bayesian Approach"
+author: "Shishir Rao"
+url: "https://calgaryanalyticsltd.com"
+email: "shishir@calgaryanalyticsltd.com"
+toc: true
+version: "v.1.0"
+date: "`r Sys.Date()`"
+format:
+    html: 
+      self-contained: true
+      grid: 
+        margin-width: 350px
+    # pdf: default
+execute:
+  engine: knitr
+  echo: fenced
+reference-location: margin
+citation-location: margin
+bibliography: skeleton.bib
+---
+
+# Introduction
+
+::: {.column-margin dy=-11cm}
+
+![Hoff, P. D. (2009). A First Course in Bayesian Statistical Methods. Springer. [https://doi.org/10.1007/978-0-387-92407-6](https://doi.org/10.1007/978-0-387-92407-6)](/Quarto Template/Images/BayesianBookHoff.png){width=75%}
+
+:::
+
+Recently, I have been revisiting my notes from the course on Applied Bayesian Methods that I took in grad school. There is a chapter in the book (see margin) on the multivariate normal model. One of the sections in the chapter discusses missing data and how to impute them using the multivariate normal model. An exercise problem at the end of the chapter asks to conduct a pairwise comparison of the means of two groups which contain missing data. First, the author suggests using regression imputation to impute the missing data in the dataset and then compare the means of the two groups using a pairwise t-test. Next, he suggests using a multivariate normal model to impute the missing data and then compare the means of the two groups. The results of the two methods lead to opposite conclusions. The t-test showed a significant result, but no significant difference was found when using the multivariate normal model for imputation. I thought this was an excellent example to illustrate the difference between multiple imputation methods, which account for the uncertainty in missing data and single imputation methods like regression imputation which do not account for this uncertainty.
+
+In this blog, I pick another dataset for pairwise comparison using the t-test with regression imputation and multivariate normal imputation and discuss the results. 
+
+# Dataset
+
+I have used the Concrete Compressive Strength dataset available on the UC Irvine Machine Learning Repository website. The full dataset can be found [here](https://archive.ics.uci.edu/ml/datasets/concrete+compressive+strength)[^1].
+
+[^1]: Yeh, I. (1998). Concrete Compressive Strength. UCI Machine Learning Repository. [https://doi.org/10.24432/C5PK67](https://doi.org/10.24432/C5PK67).
+
+The actual concrete compressive strength (MPa) for a given mixture under a specific age (days) was determined in the laboratory. We will compare the compressive strength on day 3 vs day 7. The strength on day 7 is expected to be higher than day 3 with a very high probability due to the nature of concrete. So, instead of testing for difference in means, we will test the hypothesis that the mean strength on day 7 is higher than day 3 by a certain margin (say 10 MPa).
+
+A subset of the dataset with only the relevant columns for this analysis has been extracted. The table below shows the concrete strength for three different ages (in days) for each sample - day 3, day 7 and day 28. We will only compare day 3 with day 7. 
+
+```{r include=FALSE}
+library(tidyverse)
+library(mvtnorm)
+library(knitr)
+library(kableExtra)
+library(GGally)
+set.seed(147) # For reproducibility
+
+# Load xls file where the delimiter is the semi colon and the location is "C:\\Users\\shish\\GitHub\\Survival\\Survival-Analysis\\Blog 12\\Data\\concrete+compressive+strength\\Concrete_Data.xls"
+
+concrete_data <- readxl::read_excel(
+  "C:\\Users\\shish\\GitHub\\Survival\\Survival-Analysis\\Blog 12\\Data\\concrete+compressive+strength\\Concrete_Data.xls"
+)
+# colnames(concrete_data)
+
+# Subset of the rows and columns for analysis
+concrete_data_subset <- concrete_data[
+  71:139,
+  c("Age (day)", "Concrete compressive strength(MPa, megapascals)")
+]
+colnames(concrete_data_subset) <- c("Age", "Strength")
+
+# Construct a new dataset such that we have one column for every unique Age value in concrete_data_subset which gives us the strength of concrete at that age.
+
+concrete_data_wide <- concrete_data_subset |>
+  group_by(Age) |>
+  mutate(row_id = row_number()) |>
+  ungroup() |>
+  pivot_wider(
+    names_from = Age,
+    values_from = Strength,
+    names_prefix = "Age_"
+  ) |>
+  select(-row_id)
+```
+
+```{r echo=FALSE}
+knitr::kable(
+  concrete_data_wide,
+  caption = "Table 1. Concrete Compressive Strength (MPa) at Different Ages (Days)",
+  align = rep('c', 5),
+  table.envir = 'table*'
+) %>%
+  kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+  kableExtra::scroll_box(height = "200px")
+```
+
+<div style="height:1.5rem"></div> 
+Let's artificially introduce some missingness in the dataset to illustrate the imputation methods. Note that the missingness is Missing at Random (MAR). This means that the missingness is independent of the sample (and the parameters of the multivariate normal model that we will fit). 
+
+Here is the same table, but after randomly deleting 30% of the values in each column.
+
+```{r echo=FALSE}
+# Randomly delete 30% of data in each column to simulate missing values
+
+concrete_data_missing <- concrete_data_wide
+num_rows <- nrow(concrete_data_missing)
+for (col in colnames(concrete_data_missing)) {
+  num_missing <- floor(0.3 * num_rows)
+  missing_indices <- sample(1:num_rows, num_missing)
+  concrete_data_missing[missing_indices, col] <- NA
+}
+
+knitr::kable(
+  concrete_data_missing,
+  caption = "Table 2. Concrete Compressive Strength (MPa) at Different Ages (Days) with Missing Values",
+  align = rep('c', 5),
+  table.envir = 'table*'
+) %>%
+  kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+  kableExtra::scroll_box(height = "200px")
+
+```
+<div style="height:1.5rem"></div> 
+
+The goal is to test the following hypothesis:
+
+$$\begin{aligned}
+H_0: \mu_{Day 7} - \mu_{Day 3} \leq 10 \\
+H_a: \mu_{Day 7} - \mu_{Day 3} > 10
+\end{aligned}
+$$
+
+$\mu_{Day 7}$ and $\mu_{Day 3}$ are the population means of concrete compressive strength on day 7 and day 3 respectively.
+
+# Discussion
+
+Three different methods will be used to analyze the data:
+
+1. Paired t-test after regression imputation
+2. Bayesian credible intervals after multivariate normal imputation with Jeffreys prior
+3. Bayesian credible intervals after multivariate normal imputation with Unit Information prior
+
+Since we are using a Bayesian approach, we need to set a prior for the parameters of the multivariate normal model. Jeffreys prior is a non-informative prior that is invariant under reparameterization. Unit Information prior is a weakly informative prior that provides the same amount of information as one observation from the data. Both these priors are commonly used when there is limited prior information available about the parameters of the model[^2].
+
+[^2]: If the data does not contain sufficient information, the choice of prior (even when it is non-informative or weak) can have a significant impact on the posterior distribution. In such cases, it is important to carefully consider the choice of prior and its implications for the analysis. For the purpose of this blog, we will assume that the data contains sufficient information for the priors to have minimal impact on the posterior distribution.
+
+Regression imputation involves building a linear regression model to predict the missing values in one variable using the other variable. This is done iteratively for both variables until all missing values are imputed. The paired t-test is then performed on the imputed dataset. The multivariate normal imputation involves assuming that the data follows a multivariate normal distribution and using Bayesian methods to impute the missing values. The two different priors (Jeffreys and Unit Information) will lead to slightly different results.
+
+The disadvantage of regression imputation is that it does not account for the uncertainty in the imputed values, leading to underestimated standard errors and potentially misleading results. The multivariate normal imputation, on the other hand, accounts for this uncertainty by generating multiple imputations from the posterior distribution of the parameters.
+
+```{r include=FALSE}
+## Modify the function to include mare features. See below.
+
+analyze_concrete_strength <- function(
+  dataset,
+  alternative = "two.sided",
+  threshold = 0,
+  alpha = 0.05
+) {
+  # Use first two columns
+  col1 <- colnames(dataset)[1]
+  col2 <- colnames(dataset)[2]
+
+  concrete_data_missing_subset <- dataset |>
+    select(all_of(c(col1, col2)))
+
+  # Remove rows where both columns are missing
+  concrete_data_missing_subset <- concrete_data_missing_subset |>
+    filter(!(is.na(.data[[col1]]) & is.na(.data[[col2]])))
+
+  # Regression imputation
+  complete_cases <- concrete_data_missing_subset |> drop_na()
+
+  regression_model_1 <- lm(
+    as.formula(paste(col2, "~", col1)),
+    data = complete_cases
+  )
+  predicted_values_1 <- predict(
+    regression_model_1,
+    newdata = concrete_data_missing_subset[
+      is.na(concrete_data_missing_subset[[col2]]),
+    ]
+  )
+
+  regression_model_2 <- lm(
+    as.formula(paste(col1, "~", col2)),
+    data = complete_cases
+  )
+  predicted_values_2 <- predict(
+    regression_model_2,
+    newdata = concrete_data_missing_subset[
+      is.na(concrete_data_missing_subset[[col1]]),
+    ]
+  )
+
+  concrete_data_regressionImputed <- concrete_data_missing_subset
+  concrete_data_regressionImputed[[col2]][is.na(
+    concrete_data_regressionImputed[[col2]]
+  )] <- predicted_values_1
+  concrete_data_regressionImputed[[col1]][is.na(
+    concrete_data_regressionImputed[[col1]]
+  )] <- predicted_values_2
+
+  # t-test with specified confidence level
+  conf_level <- 1 - alpha
+  t_test_result <- t.test(
+    concrete_data_regressionImputed[[col2]],
+    concrete_data_regressionImputed[[col1]],
+    paired = TRUE,
+    alternative = alternative,
+    mu = threshold,
+    conf.level = conf_level
+  )
+
+  # Multivariate normal imputation with Jeffreys prior
+  Y <- as.matrix(concrete_data_missing_subset)
+  p <- dim(Y)[2]
+  n <- nrow(Y)
+
+  O <- 1 * (!is.na(Y))
+  Y.full <- Y
+
+  for (j in 1:p) {
+    Y.full[is.na(Y.full[, j]), j] <- mean(Y.full[, j], na.rm = TRUE)
+  }
+
+  THETA.jeffreys <- SIGMA.jeffreys <- NULL
+
+  for (s in 1:10000) {
+    ybar <- apply(Y.full, 2, mean)
+    S.jeffreys <- (t(Y.full) - c(ybar)) %*% t(t(Y.full) - c(ybar))
+    Sigma <- solve(rWishart(1, n, solve(S.jeffreys))[,, 1])
+    theta <- rmvnorm(1, ybar, Sigma / n)
+    for (i in 1:n) {
+      b <- (O[i, ] == 0)
+      if (!any(b)) {
+        next
+      }
+      a <- (O[i, ] == 1)
+      iSa <- solve(Sigma[a, a])
+      beta.j <- Sigma[b, a] %*% iSa
+      Sigma.j <- Sigma[b, b] - Sigma[b, a] %*% iSa %*% Sigma[a, b]
+      theta.j <- theta[b] + beta.j %*% (t(Y.full[i, a]) - theta[a])
+      Y.full[i, b] <- rmvnorm(1, theta.j, Sigma.j)
+    }
+    THETA.jeffreys <- rbind(THETA.jeffreys, theta)
+    SIGMA.jeffreys <- rbind(SIGMA.jeffreys, c(Sigma))
+  }
+
+  mean.differences.jeffreys <- THETA.jeffreys[, 2] - THETA.jeffreys[, 1]
+
+  # Calculate credible intervals based on alternative
+  if (alternative == "greater") {
+    credible_interval_jeffreys <- c(
+      quantile(mean.differences.jeffreys, probs = alpha),
+      Inf
+    )
+  } else if (alternative == "less") {
+    credible_interval_jeffreys <- c(
+      -Inf,
+      quantile(mean.differences.jeffreys, probs = 1 - alpha)
+    )
+  } else {
+    credible_interval_jeffreys <- quantile(
+      mean.differences.jeffreys,
+      probs = c(alpha / 2, 1 - alpha / 2)
+    )
+  }
+
+  posterior_mean_jeffreys <- mean(mean.differences.jeffreys)
+  posterior_median_jeffreys <- median(mean.differences.jeffreys)
+
+  # Multivariate normal imputation with Unit Information prior
+  Y <- as.matrix(concrete_data_missing_subset)
+  p <- dim(Y)[2]
+  n <- nrow(Y)
+
+  O <- 1 * (!is.na(Y))
+  Y.full <- Y
+  for (j in 1:p) {
+    Y.full[is.na(Y.full[, j]), j] <- mean(Y.full[, j], na.rm = TRUE)
+  }
+  THETA.unitInfo <- SIGMA.unitInfo <- NULL
+  for (s in 1:10000) {
+    ybar <- apply(Y.full, 2, mean)
+    S.unitInfo <- (1 / n) * (t(Y.full) - c(ybar)) %*% t(t(Y.full) - c(ybar))
+    Sigma <- solve(rWishart(1, n + p + 1, (1 / (n + 1)) * solve(S.unitInfo))[,,
+      1
+    ])
+    theta <- rmvnorm(1, ybar, Sigma / (n + 1))
+    for (i in 1:n) {
+      b <- (O[i, ] == 0)
+      if (!any(b)) {
+        next
+      }
+      a <- (O[i, ] == 1)
+      iSa <- solve(Sigma[a, a])
+      beta.j <- Sigma[b, a] %*% iSa
+      Sigma.j <- Sigma[b, b] - Sigma[b, a] %*% iSa %*% Sigma[a, b]
+      theta.j <- theta[b] + beta.j %*% (t(Y.full[i, a]) - theta[a])
+      Y.full[i, b] <- rmvnorm(1, theta.j, Sigma.j)
+    }
+    THETA.unitInfo <- rbind(THETA.unitInfo, theta)
+    SIGMA.unitInfo <- rbind(SIGMA.unitInfo, c(Sigma))
+  }
+  mean.differences.unitInfo <- THETA.unitInfo[, 2] - THETA.unitInfo[, 1]
+
+  # Calculate credible intervals based on alternative
+  if (alternative == "greater") {
+    credible_interval_unitInfo <- c(
+      quantile(mean.differences.unitInfo, probs = alpha),
+      Inf
+    )
+  } else if (alternative == "less") {
+    credible_interval_unitInfo <- c(
+      -Inf,
+      quantile(mean.differences.unitInfo, probs = 1 - alpha)
+    )
+  } else {
+    credible_interval_unitInfo <- quantile(
+      mean.differences.unitInfo,
+      probs = c(alpha / 2, 1 - alpha / 2)
+    )
+  }
+
+  posterior_mean_unitInfo <- mean(mean.differences.unitInfo)
+  posterior_median_unitInfo <- median(mean.differences.unitInfo)
+
+  # Calculate probabilities based on alternative hypothesis
+  if (alternative == "greater") {
+    prob_threshold_jeffreys <- mean(mean.differences.jeffreys > threshold)
+    prob_threshold_unitInfo <- mean(mean.differences.unitInfo > threshold)
+    prob_threshold_ttest <- 1 - t_test_result$p.value
+  } else if (alternative == "less") {
+    prob_threshold_jeffreys <- mean(mean.differences.jeffreys < threshold)
+    prob_threshold_unitInfo <- mean(mean.differences.unitInfo < threshold)
+    prob_threshold_ttest <- 1 - t_test_result$p.value
+  } else {
+    # For two-sided, calculate probability of being greater than threshold
+    prob_threshold_jeffreys <- mean(mean.differences.jeffreys > threshold)
+    prob_threshold_unitInfo <- mean(mean.differences.unitInfo > threshold)
+    # For t-test two-sided, this doesn't have a direct probability interpretation
+    prob_threshold_ttest <- NA
+  }
+
+  # Predictive probability for next observation
+  # Generate predictive samples from posterior
+  predictive_diff_jeffreys <- numeric(10000)
+  predictive_diff_unitInfo <- numeric(10000)
+
+  for (s in 1:10000) {
+    # Jeffreys prior predictive
+    Sigma_jeff <- matrix(SIGMA.jeffreys[s, ], nrow = 2, ncol = 2)
+    new_obs_jeff <- rmvnorm(1, THETA.jeffreys[s, ], Sigma_jeff)
+    predictive_diff_jeffreys[s] <- new_obs_jeff[2] - new_obs_jeff[1]
+
+    # Unit Info prior predictive
+    Sigma_unit <- matrix(SIGMA.unitInfo[s, ], nrow = 2, ncol = 2)
+    new_obs_unit <- rmvnorm(1, THETA.unitInfo[s, ], Sigma_unit)
+    predictive_diff_unitInfo[s] <- new_obs_unit[2] - new_obs_unit[1]
+  }
+
+  # Calculate predictive probabilities based on alternative
+  if (alternative == "greater") {
+    pred_prob_jeffreys <- mean(predictive_diff_jeffreys > threshold)
+    pred_prob_unitInfo <- mean(predictive_diff_unitInfo > threshold)
+  } else if (alternative == "less") {
+    pred_prob_jeffreys <- mean(predictive_diff_jeffreys < threshold)
+    pred_prob_unitInfo <- mean(predictive_diff_unitInfo < threshold)
+  } else {
+    # For two-sided, calculate probability of being greater than threshold
+    pred_prob_jeffreys <- mean(predictive_diff_jeffreys > threshold)
+    pred_prob_unitInfo <- mean(predictive_diff_unitInfo > threshold)
+  }
+
+  # Create plot based on alternative hypothesis
+  if (alternative == "two.sided") {
+    # Two-sided: show intervals with median as point
+    intervals_df <- data.frame(
+      Method = c("t-test", "Jeffreys Prior", "Unit Info Prior"),
+      Lower = c(
+        t_test_result$conf.int[1],
+        credible_interval_jeffreys[1],
+        credible_interval_unitInfo[1]
+      ),
+      Upper = c(
+        t_test_result$conf.int[2],
+        credible_interval_jeffreys[2],
+        credible_interval_unitInfo[2]
+      ),
+      Point = c(
+        mean(
+          concrete_data_regressionImputed[[col2]] -
+            concrete_data_regressionImputed[[col1]]
+        ),
+        posterior_median_jeffreys,
+        posterior_median_unitInfo
+      )
+    )
+
+    # Set factor levels to control X-axis order
+    intervals_df$Method <- factor(
+      intervals_df$Method,
+      levels = c("t-test", "Jeffreys Prior", "Unit Info Prior")
+    )
+
+    p <- ggplot(intervals_df, aes(x = Method)) +
+      geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2) +
+      geom_point(aes(y = Point), size = 3) +
+      geom_text(
+        aes(y = Lower, label = round(Lower, 2)),
+        vjust = 1.5,
+        size = 3
+      ) +
+      geom_text(
+        aes(y = Upper, label = round(Upper, 2)),
+        vjust = -0.5,
+        size = 3
+      ) +
+      geom_text(
+        aes(y = Point, label = round(Point, 2)),
+        hjust = -0.5,
+        size = 3
+      ) +
+      geom_hline(yintercept = threshold, linetype = "dashed", color = "red") +
+      labs(
+        title = paste0(
+          round((1 - alpha) * 100, 1),
+          "% Intervals for Mean Difference between Group 2 and Group 1"
+        ),
+        y = "Mean Difference",
+        x = "Method"
+      ) +
+      theme_minimal()
+  } else {
+    # One-sided: show bounds with triangles
+    if (alternative == "greater") {
+      bounds_df <- data.frame(
+        Method = c("t-test", "Jeffreys Prior", "Unit Info Prior"),
+        Point = c(
+          mean(
+            concrete_data_regressionImputed[[col2]] -
+              concrete_data_regressionImputed[[col1]]
+          ),
+          posterior_mean_jeffreys,
+          posterior_mean_unitInfo
+        ),
+        Bound = c(
+          t_test_result$conf.int[1],
+          credible_interval_jeffreys[1],
+          credible_interval_unitInfo[1]
+        )
+      )
+      bound_label <- "Lower Bound"
+    } else {
+      bounds_df <- data.frame(
+        Method = c("t-test", "Jeffreys Prior", "Unit Info Prior"),
+        Point = c(
+          mean(
+            concrete_data_regressionImputed[[col2]] -
+              concrete_data_regressionImputed[[col1]]
+          ),
+          posterior_mean_jeffreys,
+          posterior_mean_unitInfo
+        ),
+        Bound = c(
+          t_test_result$conf.int[2],
+          credible_interval_jeffreys[2],
+          credible_interval_unitInfo[2]
+        )
+      )
+      bound_label <- "Upper Bound"
+    }
+
+    # Set factor levels to control X-axis order
+    bounds_df$Method <- factor(
+      bounds_df$Method,
+      levels = c("t-test", "Jeffreys Prior", "Unit Info Prior")
+    )
+
+    p <- ggplot(bounds_df, aes(x = Method)) +
+      geom_point(aes(y = Bound), shape = 17, size = 4, color = "blue") +
+      # geom_point(aes(y = Point), size = 3) +
+      geom_text(
+        aes(y = Bound, label = round(Bound, 2)),
+        vjust = -1,
+        size = 3,
+        color = "blue"
+      ) +
+      # geom_text(aes(y = Point, label = round(Point, 2)),
+      #           hjust = -0.5, size = 3) +
+      geom_hline(yintercept = threshold, linetype = "dashed", color = "red") +
+      labs(
+        title = paste0(
+          "Mean Difference between Group 2 and Group 1\n(",
+          round((1 - alpha) * 100, 1),
+          "% ",
+          bound_label,
+          " shown as triangle)"
+        ),
+        y = "Mean Difference",
+        x = "Method"
+      ) +
+      theme_minimal()
+  }
+
+  return(list(
+    t_test = t_test_result,
+    credible_interval_jeffreys = credible_interval_jeffreys,
+    posterior_mean_jeffreys = posterior_mean_jeffreys,
+    posterior_median_jeffreys = posterior_median_jeffreys,
+    credible_interval_unitInfo = credible_interval_unitInfo,
+    posterior_mean_unitInfo = posterior_mean_unitInfo,
+    posterior_median_unitInfo = posterior_median_unitInfo,
+    plot = p,
+    prob_threshold_jeffreys = prob_threshold_jeffreys,
+    prob_threshold_unitInfo = prob_threshold_unitInfo,
+    prob_threshold_ttest = prob_threshold_ttest,
+    predictive_prob_jeffreys = pred_prob_jeffreys,
+    predictive_prob_unitInfo = pred_prob_unitInfo,
+    regressionImputed = concrete_data_regressionImputed
+  ))
+}
+
+# Example usage:
+
+result_3_7_greater <- analyze_concrete_strength(
+  concrete_data_missing |>
+    select(Age_3, Age_7),
+  alternative = "greater",
+  threshold = 10,
+  alpha = 0.05
+)
+```
+
+Figure 1 below shows the 95% lower bounds (upper bound is infinity) for the mean difference between concrete strength on day 7 (i.e Group 2) and day 3 (i.e Group 1) using the three different methods. The red dashed line indicates the threshold of 10 MPa. The pairwise t-test after regression imputation shows a lower bound of 10.24 MPa, which is above the threshold, leading to the rejection of the null hypothesis. We would conclude that we are 95% confident that the difference in strength is above 10 MPa. However, both Bayesian credible intervals after multivariate normal imputation (with Jeffreys prior and Unit Information prior) show lower bounds of 9.2 MPa and 9.51 MPa respectively, which are below the threshold, leading to the failure to reject the null hypothesis. 
+
+```{r label="fig-main", fig.cap="Mean Difference between Concrete Strength on Day 7 and Day 3 using different methods", echo=FALSE}
+
+print(result_3_7_greater$plot)
+# result_3_7_greater$t_test
+
+# result_3_7_greater$credible_interval_jeffreys
+# result_3_7_greater$credible_interval_unitInfo
+
+# result_3_7_greater$prob_threshold_jeffreys
+# result_3_7_greater$prob_threshold_unitInfo
+
+# result_3_7_greater$predictive_prob_jeffreys
+# result_3_7_greater$predictive_prob_unitInfo
+
+```
+
+
+It is important to note the assumptions made while using the multivariate normal model for imputation. The data is assumed to be multivariate normally distributed and the missingness is assumed to be Missing at Random (MAR). Although these assumptions may not hold perfectly in practice, the multivariate normal model is often robust to moderate violations of these assumptions. However, large deviations from these assumptions can lead to biased estimates and incorrect inferences.
+
+Also, we have used a Gibbs sampler to generate 10,000 samples from the posterior distribution. The convergence of the sampler should be checked using trace plots and auto-correlation plots to ensure that the samples are representative of the posterior distribution. Only then can we trust the results obtained from the analysis. A complete analysis would include these diagnostic checks, but they have been omitted here for brevity. 
+
+# Conclusion
+
+This blog illustrates the potentially different conclusions that can be drawn using single imputation vs multiple imputation using the multivariate normal model. Single imputation methods like mean imputation and regression imputation do not account for uncertainty in the imputed values, leading to underestimated standard errors, artificially narrower intervals and potentially misleading results. Multiple imputation methods like the multivariate normal model (using a Bayesian approach in this case) account for this uncertainty by generating multiple imputations from the posterior distribution of the parameters, leading to more accurate estimates and inferences.
+
+Although we have used the multivariate normal model imputation for the purposes of doing a pairwise comparison of means where we have only 2 groups, we can use the multivariate normal model imputation for datasets with more than 2 variables as well. The book previously mentioned contains examples of using the multivariate normal model imputation for datasets with more than 2 variables as well as details on the Gibbs sampler used for generating samples from the posterior distribution. The book by Schafer (1997)[^3] is another excellent resource for learning more about multivariate imputation and other multiple imputation methods.
+
+[^3]: Schafer, J. L. (1997). *Analysis of Incomplete Multivariate Data*. Chapman and Hall/CRC. [https://doi.org/10.1201/9781420041903](https://doi.org/10.1201/9781420041903).
+
+The next chapter in the Bayesian book that I am reading is on group comparisons and heirarchical modeling. I hope to write another blog in the near future discussing these topics as well. Stay tuned!
+
+# End
+
+If you have any questions or comments, please feel free to write to me at shishir@calgaryanalyticsltd.com or reach out to me on [LinkedIn](https://www.linkedin.com/in/shishir-rao/).
+
+
+
+
+
