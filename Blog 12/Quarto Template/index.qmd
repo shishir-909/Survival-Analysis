@@ -1,0 +1,149 @@
+---
+title: "A Demonstration of Multivariate Normal Imputation"
+subtitle: "Better than Mean Imputation and Regression Imputation"
+# shorttitle: "Handout Layout"
+documenttype: Handout
+prefer-html: true
+abstract: |
+  When we have missing data in a dataset, we need to impute those missing values before we can use the data for analysis. There are several methods for imputing missing data, including mean imputation, regression imputation, and multivariate normal imputation. In this blog post, we will explore the advantages of multivariate normal imputation over mean imputation and regression imputation, and how to implement it using Bayesian modeling.
+
+author: 
+  - name: "Shishir Rao"
+    email: shishir@calgaryanalyticsltd.com
+  # - url: https://calgaryanalyticsltd.com
+toc: true
+
+version: [v.1.0]
+date: last-modified
+execute: 
+  echo: fenced
+  freeze: auto
+bibliography: references.bib
+bibliographystyle: "springer-humanities-author-date"  
+
+---
+
+# Introduction
+
+::: {.column-margin dy=-11cm}
+
+![Hoff, P. D. (2009). A first course in Bayesian statistical methods. Springer. [https://doi.org/10.1007/978-0-387-92407-6](https://doi.org/10.1007/978-0-387-92407-6)](/Images/BayesianBookHoff.png){width=75%}
+
+:::
+
+Recently, I have been revisiting my notes from the course on Applied Bayesian Methods that I took in grad school. There is a chapter in the book on the Multivariate Normal model. One of the sections in the chapter discusses missing data and how to impute them using the Multivariate Normal model. An exercise problem at the end of the chapter asks to conduct a pairwise comparison of the means of two groups which contain missing data. First, the author suggests using regression imputation to impute the missing data in the dataset and then compare the means of the two groups using a pairwise t-test. Next, he suggests using the Multivariate Normal model to impute the missing data and then compare the means of the two groups. The results of the two methods lead to opposite conclusions. The t-test shows a significant result for the difference between the two groups when using regression imputation, but no significant difference was found when using the Multivariate Normal model for imputation. I thought this was an excellent example to illustrate the difference between multiple imputation using the Multivariate Normal model and single imputation methods like regression imputation, and why the former is a better method (under certain conditions).  
+
+In this blog, I pick another dataset for pairwise comparison using the t-test with regression imputation and Multivariate Normal imputation and discuss the results of the two methods. 
+
+# Dataset
+
+For the purpose of this blog, we will use the Concrete Compressive Strength dataset available on the UC Irvine Machine Learning Repository website. The full dataset can be found [here](https://archive.ics.uci.edu/ml/datasets/concrete+compressive+strength)[^2].
+
+[^2]: Yeh, I. (1998). Concrete Compressive Strength. UCI Machine Learning Repository. https://doi.org/10.24432/C5PK67.
+
+The actual concrete compressive strength (MPa) for a given mixture under a specific aga (days) was determined in the laboratory. We will compare the compressive strength on day 3 vs day 7. The strength on day 7 is expected to be higher than day 3 with a very high probability due to the nature of concrete. So, instead of testing for difference in means, we will test the hypothesis that the mean strength on day 7 is higher than day 3 by a certain margin (say 5 MPa).
+
+A subset of the dataset with only the relevant columns for this analysis has been extracted. The table below shows the concrete strength for three different ages (in days) for each sample - day 3, day 7 and day 28. I have artificially introduced some missingness in the dataset to illustrate the imputation methods. Note that the missingness is Missing at Random (MAR). This means that the missingness is independent of the sample (and the parameters of the Multivariate Normal model that we will fit).
+
+```{r}
+library(tidyverse)
+library(mvtnorm)
+library(knitr)
+library(kableExtra)
+set.seed(147) # For reproducibility
+
+# Load xls file where the delimiter is the semi colon and the location is "C:\\Users\\shish\\GitHub\\Survival\\Survival-Analysis\\Blog 12\\Data\\concrete+compressive+strength\\Concrete_Data.xls"
+
+concrete_data <- readxl::read_excel(
+  "C:\\Users\\shish\\GitHub\\Survival\\Survival-Analysis\\Blog 12\\Data\\concrete+compressive+strength\\Concrete_Data.xls"
+)
+# colnames(concrete_data)
+
+# Subset of the rows and columns for analysis
+concrete_data_subset <- concrete_data[
+  71:139,
+  c("Age (day)", "Concrete compressive strength(MPa, megapascals)")
+]
+colnames(concrete_data_subset) <- c("Age", "Strength")
+
+# Construct a new dataset such that we have one column for every unique Age value in concrete_data_subset which gives us the strength of concrete at that age.
+
+concrete_data_wide <- concrete_data_subset |>
+  group_by(Age) |>
+  mutate(row_id = row_number()) |>
+  ungroup() |>
+  pivot_wider(
+    names_from = Age,
+    values_from = Strength,
+    names_prefix = "Day "
+  ) |>
+  select(-row_id)
+
+knitr::kable(
+  concrete_data_wide,
+  caption = "Table 1. Concrete Compressive Strength (MPa) at Different Ages (Days)",
+  align = rep('c', 5),
+  table.envir = 'table*'
+) %>%
+  kableExtra::kable_styling("striped", full_width = T, position = "left") %>%
+  kableExtra::scroll_box(height = "200px")
+```
+
+
+<!-- 
+
+```{r}
+#| label: fig-margin
+#| fig-cap: "MPG vs horsepower, colored by transmission."
+#| column: margin
+#| message: false
+library(ggplot2)
+mtcars2 <- mtcars
+mtcars2$am <- factor(
+  mtcars$am,
+  labels = c('automatic', 'manual')
+)
+ggplot(mtcars2, aes(hp, mpg, color = am)) +
+  geom_point() +
+  geom_smooth() +
+  theme(legend.position = 'bottom')
+```
+
+Note the use of the `fig-cap` chunk option to provide a figure caption. You can adjust the proportions of figures using the `fig-width` and `fig-height` chunk options. These are specified in inches, and will be automatically scaled down to fit within the handout margin. -->
+
+# Usage
+
+## Arbitrary Margin Content
+
+You can include anything in the margin by places the class `.column-margin` on the element. See an example on the right about the first fundamental theorem of calculus.
+
+::: {.column-margin dy=-6em}
+We know from *the first fundamental theorem of calculus* that for $x$ in $[a, b]$:
+
+$$\frac{d}{dx}\left( \int_{a}^{x} f(u)\,du\right)=f(x).$$
+
+:::
+
+
+## Arbitrary Full Width Content
+
+Any content can span to the full width of the page, simply place the element in a `div` and add the class `column-page-right`. For example, the following code will display its contents as full width.
+
+``` md
+::: {.fullwidth}
+Any _full width_ content here.
+:::
+```
+
+
+
+# Acknowledgements {.unlisted}
+
+Thanks to the Quarto and Typst teams for these wonderful tools.  This format is made possible by [Quarto's](https://github.com/quarto-dev/quarto-cli/discussions?discussions_q=author%3Afredguth) and [Typst's](https://discord.gg/2uDybryKPe) communities. Special thanks to:
+
+- Mickaël Canouil (`@mcanouil`);
+- Gordon Woodhull (`@gordonwoodhull`);
+- Charles Teague (`@dragonstyle`);
+- Raniere Silva (`@rgaiacs`); and
+- Christophe Dervieux (`@cderv`)
+- `@pgsuper`
