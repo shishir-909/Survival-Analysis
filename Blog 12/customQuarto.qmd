@@ -91,7 +91,7 @@ knitr::kable(
 ```
 
 <div style="height:1.5rem"></div> 
-Let's artificially introduce some missingness in the dataset to illustrate the imputation methods. Note that the missingness is Missing at Random (MAR). This means that the missingness is independent of the sample (and the parameters of the multivariate normal model that we will fit). 
+Let's artificially introduce some missingness in the dataset to illustrate the imputation methods. Note that the missingness is Missing at Random (MAR). This means that the missingness is independent of the sample within a group (and the parameters of the multivariate normal model that we will fit). 
 
 Here is the same table, but after randomly deleting 30% of the values in each column.
 
